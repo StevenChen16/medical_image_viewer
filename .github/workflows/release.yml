@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  call-build:
+    uses: ./.github/workflows/build.yml
+    with:
+      python-version: '3.10'
+      nuitka-version: 'main'
+
+  publish:
+    needs: call-build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: dist
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+
+      - name: Upload Release Assets
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: |
+            dist/nifti_viewer-windows-latest/*
+            dist/nifti_viewer-ubuntu-latest/*
+            dist/nifti_viewer-macos-latest/*
+          asset_content_type: application/octet-stream

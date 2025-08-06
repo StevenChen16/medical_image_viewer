@@ -401,7 +401,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("Version 0.0.4")
+        version_label = QLabel("Version 0.1.0")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -466,7 +466,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("版本 0.0.4")
+        version_label = QLabel("版本 0.1.0")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -1420,7 +1420,7 @@ def main():
     parser.add_argument("-i", "--image", help="直接加载影像文件 (.nii, .nii.gz, .mha, .mhd)")
     parser.add_argument("-l", "--label", help="直接加载标签文件 (.nii, .nii.gz, .mha, .mhd)")
     parser.add_argument("-o", "--output", help="保存截图的默认路径")
-    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.0.4")
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.1.0")
     parser.add_argument("--log-level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
                         default='INFO', help="设置日志级别")
     
@@ -1433,7 +1433,7 @@ def main():
     # Create application
     app = QApplication(sys.argv)
     app.setApplicationName("Medical Image Viewer")
-    app.setApplicationVersion("0.0.4")
+    app.setApplicationVersion("0.1.0")
     
     # Set application style
     app.setStyleSheet("""

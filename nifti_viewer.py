@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
     QSlider, QLabel, QCheckBox, QPushButton, QMenuBar, QStatusBar,
     QDockWidget, QGroupBox, QGridLayout, QSpinBox, QDoubleSpinBox,
     QFileDialog, QMessageBox, QProgressBar, QToolTip, QFrame, QLineEdit,
-    QDialog, QTabWidget, QTextEdit, QScrollArea, QSizePolicy
+    QDialog, QTabWidget, QTextEdit, QScrollArea, QSizePolicy, QColorDialog
 )
 from PySide6.QtCore import (
     Qt, QObject, Signal, QThread, QRunnable, QThreadPool, QTimer,
@@ -41,6 +41,79 @@ from PySide6.QtGui import (
     QPixmap, QPainter, QImage, QPen, QBrush, QColor, QTransform,
     QAction, QIcon, QFont, QWheelEvent, QMouseEvent, QPixmapCache
 )
+
+
+# ============================================================================
+# UTILITY WIDGETS
+# ============================================================================
+
+class ColorButton(QPushButton):
+    """Custom color picker button widget."""
+    
+    colorChanged = Signal(object)  # Emits QColor when color changes
+    
+    def __init__(self, *args, color=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if color is None:
+            self._color = QColor(227, 26, 28)  # Default to first enhanced color (red)
+        elif isinstance(color, (list, tuple)) and len(color) == 3:
+            self._color = QColor(*color)  # Unpack RGB tuple
+        elif isinstance(color, QColor):
+            self._color = color
+        else:
+            self._color = QColor(color)
+        self.pressed.connect(self.open_color_picker)
+        self.setFixedSize(30, 24)
+        self.update_button_color()
+    
+    def setColor(self, color):
+        """Set button color and emit signal if changed."""
+        if isinstance(color, (list, tuple)) and len(color) == 3:
+            color = QColor(*color)
+        elif not isinstance(color, QColor):
+            color = QColor(color)
+            
+        if color != self._color:
+            self._color = color
+            self.update_button_color()
+            self.colorChanged.emit(self._color)
+    
+    def color(self):
+        """Get current color as QColor."""
+        return self._color
+    
+    def color_rgb(self):
+        """Get current color as RGB tuple."""
+        return (self._color.red(), self._color.green(), self._color.blue())
+    
+    def update_button_color(self):
+        """Update button visual appearance to show current color."""
+        if self._color.isValid():
+            self.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: rgb({self._color.red()}, {self._color.green()}, {self._color.blue()});
+                    border: 2px solid #666;
+                    border-radius: 4px;
+                }}
+                QPushButton:hover {{
+                    border: 2px solid #999;
+                }}
+                QPushButton:pressed {{
+                    border: 2px solid #ccc;
+                }}
+            """)
+        else:
+            self.setStyleSheet("")
+    
+    def open_color_picker(self):
+        """Open color picker dialog."""
+        dialog = QColorDialog(self._color, self)
+        dialog.setWindowTitle("Select Label Color")
+        
+        if dialog.exec() == QColorDialog.Accepted:
+            new_color = dialog.currentColor()
+            if new_color.isValid():
+                self.setColor(new_color)
 
 
 # ============================================================================
@@ -82,9 +155,30 @@ class ImageModel(QObject):
         self.global_overlay = True
         self.global_alpha = 0.5
 
-        # Pre-compute label colormap (labels 1-20)
-        cmap = plt.get_cmap('tab20')(np.linspace(0, 1, 20))[:, :3]
-        self._label_cmap = (cmap * 255).astype(np.uint8)
+        # Medical-optimized ColorBrewer Paired palette - reordered for maximum contrast
+        # Alternates between different hue families for better medical visualization
+        # Original ColorBrewer colors maintained but resequenced for consecutive contrast
+        self._default_colors = [
+            (227,  26,  28), # 1. Red - high contrast, medically significant
+            (178, 223, 138), # 2. Light green - strong contrast to red
+            ( 31, 120, 180), # 3. Dark blue - distinct from green
+            (253, 191, 111), # 4. Orange - warm contrast to blue
+            (106,  61, 154), # 5. Purple - cool contrast to orange
+            (255, 255, 153), # 6. Yellow - bright contrast to purple
+            (166, 206, 227), # 7. Light blue - different from dark blue above
+            (177,  89,  40), # 8. Brown - earth tone contrast
+            (251, 154, 153), # 9. Light red - softer than primary red
+            ( 51, 160,  44), # 10. Dark green - different from light green
+            (255, 127,   0), # 11. Dark orange - vibrant accent
+            (202, 178, 214), # 12. Light purple - subtle final color
+        ]
+        
+        # Dynamic color mapping: label_value -> (r, g, b) tuple
+        self._custom_label_colors = {}  # User customizations
+        self._current_label_values = []  # Currently loaded label values
+        
+        # Fixed overlay transparency for clinical consistency
+        self._overlay_alpha = 0.4
         
         # Configure QPixmapCache
         QPixmapCache.setCacheLimit(pixmap_cache_size)
@@ -141,17 +235,38 @@ class ImageModel(QObject):
         return normalized
     
     def create_label_overlay(self, label_slice: np.ndarray) -> Optional[np.ndarray]:
-        """Create vectorized colored overlay from label slice."""
+        """
+        Create medical-grade colored overlay from label slice.
+        Uses ColorBrewer Paired palette with user customizations support.
+        
+        Args:
+            label_slice: 2D integer array, labels start from 1; 0 = no label
+        Returns:
+            H×W×3 uint8 pseudocolor overlay, or None if no labels
+        """
         if label_slice.size == 0:
             return None
 
+        # Ensure proper integer type for indexing
         labels = label_slice.astype(np.intp, copy=False)
         mask = labels > 0
         if not np.any(mask):
             return None
 
-        overlay = np.zeros((*label_slice.shape, 3), dtype=np.uint8)
-        overlay[mask] = self._label_cmap[(labels[mask] - 1) % len(self._label_cmap)]
+        # Create overlay using dynamic color mapping
+        h, w = label_slice.shape
+        overlay = np.zeros((h, w, 3), dtype=np.uint8)
+        
+        # Get unique label values in this slice (excluding background)
+        unique_labels = np.unique(labels[mask])
+        
+        # Apply colors for each label using vectorized operations
+        for label_val in unique_labels:
+            if label_val > 0:  # Skip background
+                label_mask = labels == label_val
+                color = self.get_label_color(label_val)
+                overlay[label_mask] = color
+        
         return overlay
 
     def render_slice(self, view_name: str, slice_idx: int,
@@ -184,12 +299,20 @@ class ImageModel(QObject):
             label_slice = self.get_slice_data(axis, slice_idx, True)
             overlay = self.create_label_overlay(label_slice)
             if overlay is not None:
-                # Create RGB version with overlay
+                # Medical-grade alpha blending with ColorBrewer Paired colors
                 img_rgb = np.stack([img_normalized] * 3, axis=-1)
                 mask = label_slice > 0
+                
+                # Use clinical-grade alpha with user adjustment
+                # Base clinical alpha (0.4) modulated by user alpha setting
+                clinical_alpha = self._overlay_alpha * alpha  # Balanced clinical visibility
                 img_rgb = img_rgb.astype(np.float32, copy=False)
                 overlay_f = overlay.astype(np.float32, copy=False)
-                img_rgb[mask] = (1 - alpha) * img_rgb[mask] + alpha * overlay_f[mask]
+                
+                # Alpha blend: base * (1-alpha) + overlay * alpha
+                img_rgb[mask] = ((1 - clinical_alpha) * img_rgb[mask] + 
+                               clinical_alpha * overlay_f[mask])
+                
                 img_rgb = img_rgb.astype(np.uint8, copy=False)
                 img_rgb = np.flipud(img_rgb)
                 img_rgb = np.ascontiguousarray(img_rgb)
@@ -298,6 +421,109 @@ class ImageModel(QObject):
         if 0 <= x < w and 0 <= y < h:
             return int(label_slice[y, x])
         return 0
+    
+    def get_label_color(self, label_value: int) -> Tuple[int, int, int]:
+        """Get RGB color for a specific label value with medical imaging optimization."""
+        if label_value == 0:
+            return (0, 0, 0)  # Background is always black
+            
+        # Check if user has customized this label
+        if label_value in self._custom_label_colors:
+            base_color = self._custom_label_colors[label_value]
+        else:
+            # Use default ColorBrewer color cycling through the palette
+            color_idx = (label_value - 1) % len(self._default_colors)
+            base_color = self._default_colors[color_idx]
+        
+        # Apply medical imaging contrast enhancement
+        return self._enhance_color_for_medical_display(base_color)
+    
+    def _enhance_color_for_medical_display(self, color: Tuple[int, int, int]) -> Tuple[int, int, int]:
+        """
+        Enhance color contrast for medical imaging dark backgrounds.
+        Boosts brightness and saturation while preserving hue relationships.
+        """
+        r, g, b = color
+        
+        # Convert to HSV for easier manipulation
+        r_norm, g_norm, b_norm = r/255.0, g/255.0, b/255.0
+        max_val = max(r_norm, g_norm, b_norm)
+        min_val = min(r_norm, g_norm, b_norm)
+        diff = max_val - min_val
+        
+        # Calculate HSV values
+        if diff == 0:
+            hue = 0
+        elif max_val == r_norm:
+            hue = (60 * ((g_norm - b_norm) / diff) + 360) % 360
+        elif max_val == g_norm:
+            hue = (60 * ((b_norm - r_norm) / diff) + 120) % 360
+        else:
+            hue = (60 * ((r_norm - g_norm) / diff) + 240) % 360
+        
+        saturation = 0 if max_val == 0 else diff / max_val
+        value = max_val
+        
+        # Medical imaging enhancement:
+        # 1. Boost saturation for better distinction
+        enhanced_saturation = min(1.0, saturation * 1.3)
+        
+        # 2. Increase brightness for dark background visibility  
+        enhanced_value = min(1.0, value * 1.2)
+        
+        # 3. Ensure minimum brightness for very dark colors
+        enhanced_value = max(0.4, enhanced_value)
+        
+        # Convert back to RGB
+        c = enhanced_value * enhanced_saturation
+        x = c * (1 - abs((hue / 60) % 2 - 1))
+        m = enhanced_value - c
+        
+        if 0 <= hue < 60:
+            r_prime, g_prime, b_prime = c, x, 0
+        elif 60 <= hue < 120:
+            r_prime, g_prime, b_prime = x, c, 0
+        elif 120 <= hue < 180:
+            r_prime, g_prime, b_prime = 0, c, x
+        elif 180 <= hue < 240:
+            r_prime, g_prime, b_prime = 0, x, c
+        elif 240 <= hue < 300:
+            r_prime, g_prime, b_prime = x, 0, c
+        else:
+            r_prime, g_prime, b_prime = c, 0, x
+        
+        # Convert back to 0-255 range
+        enhanced_r = int(min(255, max(0, (r_prime + m) * 255)))
+        enhanced_g = int(min(255, max(0, (g_prime + m) * 255)))
+        enhanced_b = int(min(255, max(0, (b_prime + m) * 255)))
+        
+        return (enhanced_r, enhanced_g, enhanced_b)
+    
+    def set_label_color(self, label_value: int, color: Tuple[int, int, int]) -> None:
+        """Set custom color for a specific label value."""
+        if label_value > 0:  # Don't allow setting background color
+            self._custom_label_colors[label_value] = color
+            # Clear render cache to show new colors
+            self._render_slice_cached.cache_clear()
+            QPixmapCache.clear()
+    
+    def reset_label_colors(self) -> None:
+        """Reset all custom colors to defaults."""
+        self._custom_label_colors.clear()
+        self._render_slice_cached.cache_clear()
+        QPixmapCache.clear()
+    
+    def get_unique_label_values(self) -> list:
+        """Get list of unique label values in current label data."""
+        if self.label_data is None:
+            return []
+        unique_vals = np.unique(self.label_data).astype(int)
+        # Filter out background (0) and sort
+        return sorted([val for val in unique_vals if val > 0])
+    
+    def update_current_label_values(self) -> None:
+        """Update the current label values list."""
+        self._current_label_values = self.get_unique_label_values()
 
 
 # ============================================================================
@@ -434,7 +660,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("Version 0.1.1")
+        version_label = QLabel("Version 0.1.2")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -499,7 +725,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("版本 0.1.1")
+        version_label = QLabel("版本 0.1.2")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -833,6 +1059,41 @@ class MainWindow(QMainWindow):
         overlay_group = create_collapsible_group("Overlay Controls", overlay_layout)
         dock_layout.addWidget(overlay_group)
 
+        # Label Colors controls
+        self.label_colors_layout = QVBoxLayout()
+        self.label_colors_scroll = QScrollArea()
+        self.label_colors_scroll.setWidgetResizable(True)
+        self.label_colors_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.label_colors_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Initial fixed height - will be dynamically adjusted when labels are loaded
+        self.label_colors_scroll.setFixedHeight(80)
+        
+        self.label_colors_widget = QWidget()
+        self.label_colors_content_layout = QVBoxLayout(self.label_colors_widget)
+        self.label_colors_content_layout.setContentsMargins(4, 4, 4, 4)
+        self.label_colors_content_layout.setSpacing(2)  # Tight spacing between label rows
+        self.label_colors_scroll.setWidget(self.label_colors_widget)
+        
+        # Add initial empty label inside the scroll area
+        empty_label = QLabel("No labels loaded")
+        empty_label.setAlignment(Qt.AlignCenter)
+        empty_label.setStyleSheet("color: #666; font-style: italic;")
+        self.label_colors_content_layout.addWidget(empty_label)
+        
+        self.label_colors_layout.addWidget(self.label_colors_scroll)
+        
+        # Reset colors button
+        self.reset_colors_btn = QPushButton("Reset to Defaults")
+        self.reset_colors_btn.setEnabled(False)
+        self.label_colors_layout.addWidget(self.reset_colors_btn)
+        
+        self.label_colors_group = create_collapsible_group("Label Colors", self.label_colors_layout)
+        self.label_colors_group.setChecked(False)  # Start collapsed
+        dock_layout.addWidget(self.label_colors_group)
+        
+        # Store color buttons for each label
+        self.label_color_buttons = {}
+
         # Progress bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -1049,6 +1310,9 @@ class ViewerController(QObject):
         self.view.global_overlay_cb.toggled.connect(self._on_global_overlay_toggled)
         self.view.alpha_slider.valueChanged.connect(self._on_alpha_changed)
         
+        # Label color controls
+        self.view.reset_colors_btn.clicked.connect(self._reset_label_colors)
+        
         # Control panel toggle button
         self.view.panel_toggle_btn.clicked.connect(self.toggle_control_panel)
     
@@ -1164,6 +1428,9 @@ class ViewerController(QObject):
             # Clear path inputs
             self.view.image_path_input.clear()
             self.view.label_path_input.clear()
+            
+            # Clear label color controls
+            self._clear_label_color_controls()
         
         for slice_view in self.view.slice_views.values():
             slice_view.scene.clear()
@@ -1319,6 +1586,8 @@ class ViewerController(QObject):
             self.view.progress_bar.setVisible(False)
             # Update label path input
             self.view.label_path_input.setText(filepath)
+            # Populate color controls
+            self._populate_label_color_controls()
         
         self._update_all_views()
     
@@ -1414,6 +1683,121 @@ class ViewerController(QObject):
         
         self._update_all_views()
     
+    def _populate_label_color_controls(self) -> None:
+        """Populate the label color controls based on current label data."""
+        # Update the model's current label values
+        self.model.update_current_label_values()
+        label_values = self.model._current_label_values
+        
+        # Clear existing controls
+        while self.view.label_colors_content_layout.count():
+            child = self.view.label_colors_content_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        self.view.label_color_buttons.clear()
+        
+        if not label_values:
+            # No labels - show empty message
+            empty_label = QLabel("No labels found")
+            empty_label.setAlignment(Qt.AlignCenter)
+            empty_label.setStyleSheet("color: #666; font-style: italic;")
+            self.view.label_colors_content_layout.addWidget(empty_label)
+            self.view.reset_colors_btn.setEnabled(False)
+            return
+        
+        # Create color controls for each label
+        for label_val in label_values:
+            # Create horizontal layout for this label
+            label_layout = QHBoxLayout()
+            
+            # Label value text
+            label_text = QLabel(f"Label {label_val}:")
+            label_text.setMinimumWidth(80)
+            label_layout.addWidget(label_text)
+            
+            # Color button
+            current_color = self.model.get_label_color(label_val)
+            color_btn = ColorButton(color=current_color)
+            color_btn.colorChanged.connect(
+                partial(self._on_label_color_changed, label_val)
+            )
+            label_layout.addWidget(color_btn)
+            
+            # Add stretch to push everything left
+            label_layout.addStretch()
+            
+            # Store button reference
+            self.view.label_color_buttons[label_val] = color_btn
+            
+            # Create container widget and add to layout
+            container = QWidget()
+            container.setLayout(label_layout)
+            self.view.label_colors_content_layout.addWidget(container)
+        
+        # Enable reset button
+        self.view.reset_colors_btn.setEnabled(True)
+        
+        # Adjust scroll area height based on number of labels
+        # Each label row: 24px button + 2px spacing + 2px margins = 28px total
+        row_height = 28
+        base_padding = 12  # Top and bottom padding in scroll area
+        num_labels = len(label_values)
+        
+        if num_labels <= 10:
+            # Show all labels without scroll for 10 or fewer
+            optimal_height = num_labels * row_height + base_padding
+            # Ensure minimum useful height
+            optimal_height = max(optimal_height, 60)
+        else:
+            # Show exactly 10 labels, allow scrolling for more
+            optimal_height = 10 * row_height + base_padding
+        
+        self.view.label_colors_scroll.setFixedHeight(optimal_height)
+        
+        # Make the group visible and expanded
+        self.view.label_colors_group.setChecked(True)
+    
+    def _on_label_color_changed(self, label_value: int, color: QColor) -> None:
+        """Handle label color changes from color buttons."""
+        rgb_color = (color.red(), color.green(), color.blue())
+        self.model.set_label_color(label_value, rgb_color)
+        self._update_all_views()
+    
+    def _reset_label_colors(self) -> None:
+        """Reset all label colors to defaults."""
+        self.model.reset_label_colors()
+        # Update button colors to show defaults
+        for label_val, button in self.view.label_color_buttons.items():
+            default_color = self.model.get_label_color(label_val)
+            button.setColor(default_color)
+        self._update_all_views()
+    
+    def _clear_label_color_controls(self) -> None:
+        """Clear all label color controls."""
+        # Clear existing controls
+        while self.view.label_colors_content_layout.count():
+            child = self.view.label_colors_content_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        self.view.label_color_buttons.clear()
+        
+        # Show empty message
+        empty_label = QLabel("No labels loaded")
+        empty_label.setAlignment(Qt.AlignCenter)
+        empty_label.setStyleSheet("color: #666; font-style: italic;")
+        self.view.label_colors_content_layout.addWidget(empty_label)
+        
+        # Disable reset button
+        self.view.reset_colors_btn.setEnabled(False)
+        
+        # Reset scroll area to default height
+        self.view.label_colors_scroll.setFixedHeight(80)
+        
+        # Collapse the group
+        self.view.label_colors_group.setChecked(False)
+    
     def _update_all_views(self) -> None:
         """Update all visible slice views."""
         for name, config in self.model.view_configs.items():
@@ -1503,7 +1887,7 @@ Keyboard Shortcuts:
                         help="QPixmapCache size in KB (default: 100MB)")
     parser.add_argument("--preload-count", type=int, default=2, 
                         help="Number of adjacent slices to preload (default: 2)")
-    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.1.1")
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.1.2")
     parser.add_argument("--log-level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
                         default='INFO', help="Set logging level")
     
@@ -1516,7 +1900,7 @@ Keyboard Shortcuts:
     # Create application
     app = QApplication(sys.argv)
     app.setApplicationName("Medical Image Viewer")
-    app.setApplicationVersion("0.1.1")
+    app.setApplicationVersion("0.1.2")
     
     # Set application style
     app.setStyleSheet("""

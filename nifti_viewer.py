@@ -1401,28 +1401,28 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(
         prog="nifti_viewer_qt",
-        description="交互式医学影像文件查看器：三视图、标签叠加、可缩放、可旋转。",
+        description="Interactive medical image viewer: three-view display, label overlay, zoomable and rotatable.",
         epilog="""
-快捷键：
-  Ctrl+O     打开影像文件
-  Ctrl+L     打开标签文件  
-  Ctrl+S     保存当前视图为 PNG
-  Ctrl+R     重置视图和缓存
-  Ctrl+T     切换控制面板显示/隐藏
-  Ctrl+Wheel 缩放视图
-  Wheel      切换切片
-  Right-Drag 平移
-  F          适应所有视图
-  F1         关于对话框
+Keyboard Shortcuts:
+  Ctrl+O     Load image file
+  Ctrl+L     Load label file  
+  Ctrl+S     Save current view as PNG
+  Ctrl+R     Reset views and cache
+  Ctrl+T     Toggle control panel visibility
+  Ctrl+Wheel Zoom view
+  Wheel      Navigate slices
+  Right-Drag Pan view
+  F          Fit all views
+  F1         Show about dialog
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("-i", "--image", help="直接加载影像文件 (.nii, .nii.gz, .mha, .mhd)")
-    parser.add_argument("-l", "--label", help="直接加载标签文件 (.nii, .nii.gz, .mha, .mhd)")
-    parser.add_argument("-o", "--output", help="保存截图的默认路径")
+    parser.add_argument("-i", "--image", help="Load image file directly (.nii, .nii.gz, .mha, .mhd)")
+    parser.add_argument("-l", "--label", help="Load label file directly (.nii, .nii.gz, .mha, .mhd)")
+    parser.add_argument("-o", "--output", help="Default path for screenshot saving")
     parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.1.0")
     parser.add_argument("--log-level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
-                        default='INFO', help="设置日志级别")
+                        default='INFO', help="Set logging level")
     
     args = parser.parse_args()
     

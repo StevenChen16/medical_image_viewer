@@ -9,7 +9,7 @@ import os
 import logging
 import argparse
 from pathlib import Path
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import Optional, Tuple, Dict, Any
 import traceback
 
@@ -60,7 +60,7 @@ class ImageModel(QObject):
     loadError = Signal(str)           # error_message
     loadProgress = Signal(int)        # loading progress percentage
     
-    def __init__(self):
+    def __init__(self, pixmap_cache_size: int = 102400):  # 100MB default
         super().__init__()
         
         # Core data storage
@@ -85,6 +85,9 @@ class ImageModel(QObject):
         # Pre-compute label colormap (labels 1-20)
         cmap = plt.get_cmap('tab20')(np.linspace(0, 1, 20))[:, :3]
         self._label_cmap = (cmap * 255).astype(np.uint8)
+        
+        # Configure QPixmapCache
+        QPixmapCache.setCacheLimit(pixmap_cache_size)
         
     def _load_image_data(self, filepath: str) -> np.ndarray:
         """
@@ -174,10 +177,14 @@ class ImageModel(QObject):
         img_normalized = self.normalize_image(img_slice)
 
         # Handle overlay if available
-        if show_overlay and self.label_data is not None:
+        has_overlay = (show_overlay and self.label_data is not None and 
+                      self.get_slice_data(axis, slice_idx, True).size > 0)
+        
+        if has_overlay:
             label_slice = self.get_slice_data(axis, slice_idx, True)
             overlay = self.create_label_overlay(label_slice)
             if overlay is not None:
+                # Create RGB version with overlay
                 img_rgb = np.stack([img_normalized] * 3, axis=-1)
                 mask = label_slice > 0
                 img_rgb = img_rgb.astype(np.float32, copy=False)
@@ -190,11 +197,10 @@ class ImageModel(QObject):
                 bytes_per_line = 3 * width
                 qimage = QImage(img_rgb.data, width, height, bytes_per_line, QImage.Format_RGB888)
             else:
-                img_flipped = np.flipud(img_normalized)
-                img_flipped = np.ascontiguousarray(img_flipped)
-                height, width = img_flipped.shape
-                qimage = QImage(img_flipped.data, width, height, img_flipped.strides[0], QImage.Format_Grayscale8)
-        else:
+                has_overlay = False
+        
+        if not has_overlay:
+            # Use efficient grayscale format
             img_flipped = np.flipud(img_normalized)
             img_flipped = np.ascontiguousarray(img_flipped)
             height, width = img_flipped.shape
@@ -207,7 +213,7 @@ class ImageModel(QObject):
 
         return qimage
     
-    def load_image(self, filepath: str):
+    def load_image(self, filepath: str) -> None:
         """Load medical image data."""
         try:
             self.loadProgress.emit(0)
@@ -230,7 +236,7 @@ class ImageModel(QObject):
         except Exception as e:
             self.loadError.emit(f"Failed to load image: {str(e)}")
 
-    def load_labels(self, filepath: str):
+    def load_labels(self, filepath: str) -> None:
         """Load medical label data."""
         try:
             self.loadProgress.emit(0)
@@ -268,7 +274,7 @@ class ImageModel(QObject):
         axis = self.view_configs[view_name]['axis']
         return self.image_data.shape[axis] - 1
     
-    def set_slice(self, view_name: str, slice_idx: int):
+    def set_slice(self, view_name: str, slice_idx: int) -> None:
         """Update slice index for a view."""
         max_slice = self.get_max_slice(view_name)
         self.view_configs[view_name]['slice'] = max(0, min(slice_idx, max_slice))
@@ -307,7 +313,7 @@ class LoadWorker(QRunnable):
         self.filepath = filepath
         self.is_label = is_label
     
-    def run(self):
+    def run(self) -> None:
         """Execute loading in background thread."""
         try:
             if self.is_label:
@@ -316,6 +322,33 @@ class LoadWorker(QRunnable):
                 self.model.load_image(self.filepath)
         except Exception as e:
             self.model.loadError.emit(f"Background loading failed: {str(e)}")
+
+
+class PreloadWorker(QRunnable):
+    """Background worker for preloading adjacent slices."""
+    
+    def __init__(self, model: ImageModel, view_name: str, slice_indices: list, 
+                 show_overlay: bool = True, alpha: float = 0.5):
+        super().__init__()
+        self.model = model
+        self.view_name = view_name
+        self.slice_indices = slice_indices
+        self.show_overlay = show_overlay
+        self.alpha = alpha
+    
+    def run(self) -> None:
+        """Preload slices in background."""
+        try:
+            for slice_idx in self.slice_indices:
+                # Check if slice is valid
+                max_slice = self.model.get_max_slice(self.view_name)
+                if 0 <= slice_idx <= max_slice:
+                    # Trigger cache population via render_slice
+                    self.model.render_slice(self.view_name, slice_idx, 
+                                          self.show_overlay, self.alpha)
+        except Exception as e:
+            # Silent fail for preloading to avoid disrupting user experience
+            pass
 
 
 # ============================================================================
@@ -385,7 +418,7 @@ class AboutDialog(QDialog):
             }
         """)
     
-    def create_english_tab(self):
+    def create_english_tab(self) -> None:
         """Create English content tab."""
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -401,7 +434,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("Version 0.1.0")
+        version_label = QLabel("Version 0.1.1")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -450,7 +483,7 @@ class AboutDialog(QDialog):
         scroll_area.setWidget(content_widget)
         self.tab_widget.addTab(scroll_area, "English")
     
-    def create_chinese_tab(self):
+    def create_chinese_tab(self) -> None:
         """Create Chinese content tab."""
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -466,7 +499,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("版本 0.1.0")
+        version_label = QLabel("版本 0.1.1")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -552,20 +585,25 @@ class SliceView(QGraphicsView):
         self._pan_start = QPointF()
         self._panning = False
     
-    def set_model(self, model: ImageModel):
+    def set_model(self, model: ImageModel) -> None:
         """Connect to data model."""
         self.model = model
     
-    def set_image(self, qimage: QImage):
-        """Update displayed image."""
+    def set_image(self, qimage: QImage) -> None:
+        """Update displayed image with QPixmapCache optimization."""
         if qimage.isNull():
             self.pixmap_item.setPixmap(QPixmap())
             return
-        key = str(qimage.cacheKey())
-        pixmap = QPixmapCache.find(key)
+        
+        # Generate cache key based on image properties and view name
+        cache_key = f"{self.view_name}_{qimage.cacheKey()}_{qimage.format()}"
+        pixmap = QPixmapCache.find(cache_key)
+        
         if pixmap is None:
             pixmap = QPixmap.fromImage(qimage)
-            QPixmapCache.insert(key, pixmap)
+            # Insert with size-aware caching
+            QPixmapCache.insert(cache_key, pixmap)
+        
         self.pixmap_item.setPixmap(pixmap)
         
         # Fit in view on first load
@@ -625,7 +663,7 @@ class SliceView(QGraphicsView):
         
         super().mouseReleaseEvent(event)
     
-    def reset_view(self):
+    def reset_view(self) -> None:
         """Reset zoom and pan to fit image."""
         self.resetTransform()
         if not self.pixmap_item.pixmap().isNull():
@@ -651,7 +689,7 @@ class MainWindow(QMainWindow):
         self.setup_menu()
         self.setup_statusbar()
         
-    def setup_ui(self):
+    def setup_ui(self) -> None:
         """Create main UI layout."""
         # Central widget with splitter
         central_widget = QWidget()
@@ -693,7 +731,7 @@ class MainWindow(QMainWindow):
         # Create control dock
         self.setup_control_dock()
     
-    def setup_control_dock(self):
+    def setup_control_dock(self) -> None:
         """Create docked control panel with collapsible sections."""
         self.control_dock = QDockWidget("Controls", self)
         self.control_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
@@ -811,7 +849,7 @@ class MainWindow(QMainWindow):
         
         self.addDockWidget(Qt.RightDockWidgetArea, self.control_dock)
     
-    def setup_toolbar(self):
+    def setup_toolbar(self) -> None:
         """Create toolbar with control panel toggle button."""
         toolbar = self.addToolBar("Main")
         toolbar.setMovable(False)
@@ -847,7 +885,7 @@ class MainWindow(QMainWindow):
         # Store toolbar reference
         self.main_toolbar = toolbar
     
-    def setup_menu(self):
+    def setup_menu(self) -> None:
         """Create menu bar."""
         menubar = self.menuBar()
         
@@ -914,7 +952,7 @@ class MainWindow(QMainWindow):
             'about': about_action
         }
     
-    def setup_statusbar(self):
+    def setup_statusbar(self) -> None:
         """Create status bar."""
         self.status_bar = self.statusBar()
         self.status_label = QLabel("Ready - Load an image to begin")
@@ -935,18 +973,26 @@ class ViewerController(QObject):
     Handles all user interactions, signal-slot connections, and business logic.
     """
     
-    def __init__(self, model: ImageModel, view: MainWindow):
+    def __init__(self, model: ImageModel, view: MainWindow, preload_count: int = 2):
         super().__init__()
         
         self.model = model
         self.view = view
         self.thread_pool = QThreadPool()
+        self.preload_thread_pool = QThreadPool()
+        self.preload_thread_pool.setMaxThreadCount(2)  # Limit preload threads
+        self.preload_count = preload_count
         self.default_output_path = None
         
         # Anti-bounce timer for smooth interactions
         self.update_timer = QTimer()
         self.update_timer.setSingleShot(True)
         self.update_timer.timeout.connect(self._update_all_views)
+        
+        # Preload timer to avoid excessive preloading
+        self.preload_timer = QTimer()
+        self.preload_timer.setSingleShot(True)
+        self.preload_timer.timeout.connect(self._preload_adjacent_slices)
         
         # Setup connections
         self.setup_model_connections()
@@ -957,14 +1003,14 @@ class ViewerController(QObject):
         for slice_view in self.view.slice_views.values():
             slice_view.set_model(self.model)
     
-    def setup_model_connections(self):
+    def setup_model_connections(self) -> None:
         """Connect model signals."""
         self.model.imageLoaded.connect(self._on_image_loaded)
         self.model.labelLoaded.connect(self._on_labels_loaded)
         self.model.loadError.connect(self._on_load_error)
         self.model.loadProgress.connect(self._on_load_progress)
     
-    def setup_view_connections(self):
+    def setup_view_connections(self) -> None:
         """Connect main view signals."""
         # Menu actions
         self.view.actions['load_image'].triggered.connect(self.load_image)
@@ -987,7 +1033,7 @@ class ViewerController(QObject):
         
         # View visibility
         for name, checkbox in self.view.view_checkboxes.items():
-            checkbox.toggled.connect(lambda checked, n=name: self._toggle_view_visibility(n, checked))
+            checkbox.toggled.connect(partial(self._toggle_view_visibility, name))
         
         # Slice controls
         for name, controls in self.view.slice_controls.items():
@@ -995,9 +1041,9 @@ class ViewerController(QObject):
             spinbox = controls['spinbox']
             rotate_btn = controls['rotate_btn']
             
-            slider.valueChanged.connect(lambda v, n=name: self._on_slice_changed(n, v))
-            spinbox.valueChanged.connect(lambda v, n=name: self._on_slice_changed(n, v))
-            rotate_btn.clicked.connect(lambda checked, n=name: self._rotate_view(n))
+            slider.valueChanged.connect(partial(self._on_slice_changed, name))
+            spinbox.valueChanged.connect(partial(self._on_slice_changed, name))
+            rotate_btn.clicked.connect(partial(self._rotate_view, name))
         
         # Overlay controls
         self.view.global_overlay_cb.toggled.connect(self._on_global_overlay_toggled)
@@ -1006,13 +1052,13 @@ class ViewerController(QObject):
         # Control panel toggle button
         self.view.panel_toggle_btn.clicked.connect(self.toggle_control_panel)
     
-    def setup_slice_view_connections(self):
+    def setup_slice_view_connections(self) -> None:
         """Connect slice view signals."""
         for name, slice_view in self.view.slice_views.items():
-            slice_view.wheelScrolled.connect(lambda delta, n=name: self._on_wheel_scroll(n, delta))
-            slice_view.mousePositionChanged.connect(lambda x, y, n=name: self._on_mouse_position(n, x, y))
+            slice_view.wheelScrolled.connect(partial(self._on_wheel_scroll, name))
+            slice_view.mousePositionChanged.connect(partial(self._on_mouse_position, name))
     
-    def load_image(self):
+    def load_image(self) -> None:
         """Load image file dialog."""
         filepath, _ = QFileDialog.getOpenFileName(
             self.view,
@@ -1033,7 +1079,7 @@ class ViewerController(QObject):
             worker = LoadWorker(self.model, filepath, False)
             self.thread_pool.start(worker)
     
-    def load_labels(self):
+    def load_labels(self) -> None:
         """Load labels file dialog."""
         filepath, _ = QFileDialog.getOpenFileName(
             self.view,
@@ -1054,7 +1100,7 @@ class ViewerController(QObject):
             worker = LoadWorker(self.model, filepath, True)
             self.thread_pool.start(worker)
     
-    def update_image_from_path(self):
+    def update_image_from_path(self) -> None:
         """Load image from path input field."""
         # Check if control panel exists
         if not (hasattr(self.view, 'control_dock') and self.view.control_dock is not None):
@@ -1077,7 +1123,7 @@ class ViewerController(QObject):
         worker = LoadWorker(self.model, filepath, False)
         self.thread_pool.start(worker)
     
-    def update_labels_from_path(self):
+    def update_labels_from_path(self) -> None:
         """Load labels from path input field."""
         # Check if control panel exists
         if not (hasattr(self.view, 'control_dock') and self.view.control_dock is not None):
@@ -1100,7 +1146,7 @@ class ViewerController(QObject):
         worker = LoadWorker(self.model, filepath, True)
         self.thread_pool.start(worker)
     
-    def reset_all(self):
+    def reset_all(self) -> None:
         """Reset all views and data."""
         # Clear model
         self.model.image_data = None
@@ -1130,12 +1176,12 @@ class ViewerController(QObject):
         if hasattr(self.view, 'control_dock') and self.view.control_dock is not None:
             self.view.progress_bar.setVisible(False)
     
-    def fit_all_views(self):
+    def fit_all_views(self) -> None:
         """Fit all views to show full image."""
         for slice_view in self.view.slice_views.values():
             slice_view.reset_view()
     
-    def save_screenshot(self):
+    def save_screenshot(self) -> None:
         """Save current view as screenshot."""
         default_name = self.default_output_path or "screenshot.png"
         filepath, _ = QFileDialog.getSaveFileName(
@@ -1151,12 +1197,12 @@ class ViewerController(QObject):
             pixmap.save(filepath)
             self.view.status_label.setText(f"Screenshot saved: {Path(filepath).name}")
     
-    def show_about(self):
+    def show_about(self) -> None:
         """Show About dialog."""
         about_dialog = AboutDialog(self.view)
         about_dialog.exec()
     
-    def toggle_control_panel(self):
+    def toggle_control_panel(self) -> None:
         """Toggle control panel visibility - completely remove/add dock."""
         is_visible = hasattr(self.view, 'control_dock') and self.view.control_dock is not None
         
@@ -1202,7 +1248,7 @@ class ViewerController(QObject):
             self.view.panel_toggle_btn.setToolTip("Hide Control Panel (Ctrl+T)")
             self.view.actions['toggle_control_panel'].setChecked(True)
     
-    def _reconnect_control_signals(self):
+    def _reconnect_control_signals(self) -> None:
         """Reconnect control panel signals after recreating the dock."""
         # Control buttons
         self.view.load_image_btn.clicked.connect(self.load_image)
@@ -1215,7 +1261,7 @@ class ViewerController(QObject):
         
         # View visibility
         for name, checkbox in self.view.view_checkboxes.items():
-            checkbox.toggled.connect(lambda checked, n=name: self._toggle_view_visibility(n, checked))
+            checkbox.toggled.connect(partial(self._toggle_view_visibility, name))
         
         # Slice controls
         for name, controls in self.view.slice_controls.items():
@@ -1223,15 +1269,15 @@ class ViewerController(QObject):
             spinbox = controls['spinbox']
             rotate_btn = controls['rotate_btn']
             
-            slider.valueChanged.connect(lambda v, n=name: self._on_slice_changed(n, v))
-            spinbox.valueChanged.connect(lambda v, n=name: self._on_slice_changed(n, v))
-            rotate_btn.clicked.connect(lambda checked, n=name: self._rotate_view(n))
+            slider.valueChanged.connect(partial(self._on_slice_changed, name))
+            spinbox.valueChanged.connect(partial(self._on_slice_changed, name))
+            rotate_btn.clicked.connect(partial(self._rotate_view, name))
         
         # Overlay controls
         self.view.global_overlay_cb.toggled.connect(self._on_global_overlay_toggled)
         self.view.alpha_slider.valueChanged.connect(self._on_alpha_changed)
     
-    def _on_image_loaded(self, filepath: str, shape: tuple):
+    def _on_image_loaded(self, filepath: str, shape: tuple) -> None:
         """Handle successful image loading."""
         self.view.status_label.setText(f"Image loaded: {Path(filepath).name} - Shape: {shape}")
         
@@ -1264,7 +1310,7 @@ class ViewerController(QObject):
         
         self._update_all_views()
     
-    def _on_labels_loaded(self, filepath: str, unique_count: int):
+    def _on_labels_loaded(self, filepath: str, unique_count: int) -> None:
         """Handle successful label loading."""
         self.view.status_label.setText(f"Labels loaded: {Path(filepath).name} - {unique_count} unique labels")
         
@@ -1276,7 +1322,7 @@ class ViewerController(QObject):
         
         self._update_all_views()
     
-    def _on_load_error(self, error_msg: str):
+    def _on_load_error(self, error_msg: str) -> None:
         """Handle loading errors."""
         self.view.status_label.setText("Load failed")
         
@@ -1286,14 +1332,14 @@ class ViewerController(QObject):
 
         QMessageBox.critical(self.view, "Load Error", error_msg)
 
-    def _on_load_progress(self, value: int):
+    def _on_load_progress(self, value: int) -> None:
         """Update progress bar during loading."""
         if hasattr(self.view, 'control_dock') and self.view.control_dock is not None:
             self.view.progress_bar.setValue(value)
             if value >= 100:
                 self.view.progress_bar.setVisible(False)
     
-    def _toggle_view_visibility(self, view_name: str, visible: bool):
+    def _toggle_view_visibility(self, view_name: str, visible: bool) -> None:
         """Toggle view visibility."""
         self.model.view_configs[view_name]['show'] = visible
         
@@ -1302,7 +1348,7 @@ class ViewerController(QObject):
         widget = self.view.splitter.widget(view_index)
         widget.setVisible(visible)
     
-    def _on_slice_changed(self, view_name: str, value: int):
+    def _on_slice_changed(self, view_name: str, value: int) -> None:
         """Handle slice navigation."""
         # Sync slider and spinbox
         controls = self.view.slice_controls[view_name]
@@ -1319,7 +1365,7 @@ class ViewerController(QObject):
         # Debounced update
         self.update_timer.start(40)  # 40ms debounce for smooth scrolling
     
-    def _on_wheel_scroll(self, view_name: str, delta: int):
+    def _on_wheel_scroll(self, view_name: str, delta: int) -> None:
         """Handle mouse wheel slice navigation."""
         controls = self.view.slice_controls[view_name]
         current_value = controls['slider'].value()
@@ -1331,7 +1377,7 @@ class ViewerController(QObject):
         
         self._on_slice_changed(view_name, new_value)
     
-    def _on_mouse_position(self, view_name: str, x: int, y: int):
+    def _on_mouse_position(self, view_name: str, x: int, y: int) -> None:
         """Handle mouse position for tooltips and coordinates."""
         # Update coordinate display
         self.view.coord_label.setText(f"Position: ({x}, {y})")
@@ -1345,18 +1391,18 @@ class ViewerController(QObject):
                     f"Label: {label_value}"
                 )
     
-    def _rotate_view(self, view_name: str):
+    def _rotate_view(self, view_name: str) -> None:
         """Rotate view by 90 degrees."""
         config = self.model.view_configs[view_name]
         config['rotation'] = (config['rotation'] + 90) % 360
         self._update_view(view_name)
     
-    def _on_global_overlay_toggled(self, checked: bool):
+    def _on_global_overlay_toggled(self, checked: bool) -> None:
         """Handle global overlay toggle."""
         self.model.global_overlay = checked
         self._update_all_views()
     
-    def _on_alpha_changed(self, value: int):
+    def _on_alpha_changed(self, value: int) -> None:
         """Handle alpha slider changes."""
         alpha = value / 100.0
         self.model.global_alpha = alpha
@@ -1368,13 +1414,13 @@ class ViewerController(QObject):
         
         self._update_all_views()
     
-    def _update_all_views(self):
+    def _update_all_views(self) -> None:
         """Update all visible slice views."""
         for name, config in self.model.view_configs.items():
             if config['show']:
                 self._update_view(name)
     
-    def _update_view(self, view_name: str):
+    def _update_view(self, view_name: str) -> None:
         """Update a specific view."""
         if self.model.image_data is None:
             return
@@ -1390,13 +1436,46 @@ class ViewerController(QObject):
         # Update view
         slice_view = self.view.slice_views[view_name]
         slice_view.set_image(qimage)
+        
+        # Trigger preloading with debounce
+        self.preload_timer.start(200)  # 200ms delay to avoid excessive preloading
+    
+    def _preload_adjacent_slices(self) -> None:
+        """Preload adjacent slices for all visible views."""
+        if self.model.image_data is None:
+            return
+        
+        for view_name, config in self.model.view_configs.items():
+            if not config['show']:
+                continue
+                
+            current_slice = config['slice']
+            max_slice = self.model.get_max_slice(view_name)
+            show_overlay = config['overlay'] and self.model.global_overlay
+            alpha = config['alpha']
+            
+            # Generate adjacent slice indices
+            adjacent_slices = []
+            for offset in range(1, self.preload_count + 1):
+                # Forward slices
+                if current_slice + offset <= max_slice:
+                    adjacent_slices.append(current_slice + offset)
+                # Backward slices
+                if current_slice - offset >= 0:
+                    adjacent_slices.append(current_slice - offset)
+            
+            if adjacent_slices:
+                # Start preload worker
+                worker = PreloadWorker(self.model, view_name, adjacent_slices, 
+                                     show_overlay, alpha)
+                self.preload_thread_pool.start(worker)
 
 
 # ============================================================================
 # MAIN APPLICATION
 # ============================================================================
 
-def main():
+def main() -> None:
     """Main application entry point."""
     # Parse command line arguments
     parser = argparse.ArgumentParser(
@@ -1420,7 +1499,11 @@ Keyboard Shortcuts:
     parser.add_argument("-i", "--image", help="Load image file directly (.nii, .nii.gz, .mha, .mhd)")
     parser.add_argument("-l", "--label", help="Load label file directly (.nii, .nii.gz, .mha, .mhd)")
     parser.add_argument("-o", "--output", help="Default path for screenshot saving")
-    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.1.0")
+    parser.add_argument("--pixmap-cache-size", type=int, default=102400, 
+                        help="QPixmapCache size in KB (default: 100MB)")
+    parser.add_argument("--preload-count", type=int, default=2, 
+                        help="Number of adjacent slices to preload (default: 2)")
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.1.1")
     parser.add_argument("--log-level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
                         default='INFO', help="Set logging level")
     
@@ -1433,7 +1516,7 @@ Keyboard Shortcuts:
     # Create application
     app = QApplication(sys.argv)
     app.setApplicationName("Medical Image Viewer")
-    app.setApplicationVersion("0.1.0")
+    app.setApplicationVersion("0.1.1")
     
     # Set application style
     app.setStyleSheet("""
@@ -1524,9 +1607,9 @@ Keyboard Shortcuts:
     
     try:
         # Create MVC components
-        model = ImageModel()
+        model = ImageModel(pixmap_cache_size=args.pixmap_cache_size)
         view = MainWindow()
-        controller = ViewerController(model, view)
+        controller = ViewerController(model, view, preload_count=args.preload_count)
         
         # Handle command line arguments
         if args.image:

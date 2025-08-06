@@ -991,14 +991,21 @@ class MainWindow(QMainWindow):
         self.label_colors_scroll.setWidgetResizable(True)
         self.label_colors_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.label_colors_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.label_colors_scroll.setMaximumHeight(200)
+        # Initial fixed height - will be dynamically adjusted when labels are loaded
+        self.label_colors_scroll.setFixedHeight(80)
         
         self.label_colors_widget = QWidget()
         self.label_colors_content_layout = QVBoxLayout(self.label_colors_widget)
         self.label_colors_content_layout.setContentsMargins(4, 4, 4, 4)
+        self.label_colors_content_layout.setSpacing(2)  # Tight spacing between label rows
         self.label_colors_scroll.setWidget(self.label_colors_widget)
         
-        self.label_colors_layout.addWidget(QLabel("No labels loaded"))
+        # Add initial empty label inside the scroll area
+        empty_label = QLabel("No labels loaded")
+        empty_label.setAlignment(Qt.AlignCenter)
+        empty_label.setStyleSheet("color: #666; font-style: italic;")
+        self.label_colors_content_layout.addWidget(empty_label)
+        
         self.label_colors_layout.addWidget(self.label_colors_scroll)
         
         # Reset colors button
@@ -1657,6 +1664,24 @@ class ViewerController(QObject):
         # Enable reset button
         self.view.reset_colors_btn.setEnabled(True)
         
+        # Adjust scroll area height based on number of labels
+        # Each label row: 24px button + 2px spacing + 2px margins = 28px total
+        row_height = 28
+        base_padding = 12  # Top and bottom padding in scroll area
+        num_labels = len(label_values)
+        
+        if num_labels <= 10:
+            # Show all labels without scroll for 10 or fewer
+            optimal_height = num_labels * row_height + base_padding
+            # Ensure minimum useful height
+            optimal_height = max(optimal_height, 60)
+        else:
+            # Show exactly 10 labels, allow scrolling for more
+            optimal_height = 10 * row_height + base_padding
+        
+        print(f"Setting label colors height to {optimal_height}px for {num_labels} labels")  # Debug output
+        self.view.label_colors_scroll.setFixedHeight(optimal_height)
+        
         # Make the group visible and expanded
         self.view.label_colors_group.setChecked(True)
     
@@ -1693,6 +1718,9 @@ class ViewerController(QObject):
         
         # Disable reset button
         self.view.reset_colors_btn.setEnabled(False)
+        
+        # Reset scroll area to default height
+        self.view.label_colors_scroll.setFixedHeight(80)
         
         # Collapse the group
         self.view.label_colors_group.setChecked(False)

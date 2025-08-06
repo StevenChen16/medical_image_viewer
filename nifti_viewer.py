@@ -16,7 +16,6 @@ import traceback
 import numpy as np
 import nibabel as nib
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 from PIL import Image
 
 # Conditionally import SimpleITK for MHA support
@@ -40,7 +39,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QPixmap, QPainter, QImage, QPen, QBrush, QColor, QTransform,
-    QAction, QIcon, QFont, QWheelEvent, QMouseEvent
+    QAction, QIcon, QFont, QWheelEvent, QMouseEvent, QPixmapCache
 )
 
 
@@ -59,6 +58,7 @@ class ImageModel(QObject):
     labelLoaded = Signal(str, int)    # filename, unique_labels_count
     sliceReady = Signal(str, int, QImage)  # view_name, slice_idx, image
     loadError = Signal(str)           # error_message
+    loadProgress = Signal(int)        # loading progress percentage
     
     def __init__(self):
         super().__init__()
@@ -81,10 +81,10 @@ class ImageModel(QObject):
         # Global settings
         self.global_overlay = True
         self.global_alpha = 0.5
-        
-        # Performance caching
-        self._slice_cache = {}  # {(view, slice, show_overlay, alpha): QImage}
-        self._cache_max_size = 100
+
+        # Pre-compute label colormap (labels 1-20)
+        cmap = plt.get_cmap('tab20')(np.linspace(0, 1, 20))[:, :3]
+        self._label_cmap = (cmap * 255).astype(np.uint8)
         
     def _load_image_data(self, filepath: str) -> np.ndarray:
         """
@@ -141,131 +141,123 @@ class ImageModel(QObject):
         """Create vectorized colored overlay from label slice."""
         if label_slice.size == 0:
             return None
-            
-        unique_labels = np.unique(label_slice)
-        if len(unique_labels) <= 1:  # Only background
+
+        labels = label_slice.astype(np.intp, copy=False)
+        mask = labels > 0
+        if not np.any(mask):
             return None
-        
-        # Vectorized colormap application
-        colormap = plt.get_cmap('tab20')
-        overlay = np.zeros((*label_slice.shape, 4), dtype=np.uint8)
-        
-        for label in unique_labels:
-            if label == 0:  # Skip background
-                continue
-            mask = label_slice == label
-            color = colormap(label / 20.0)
-            overlay[mask] = [int(c * 255) for c in color]
-        
+
+        overlay = np.zeros((*label_slice.shape, 3), dtype=np.uint8)
+        overlay[mask] = self._label_cmap[(labels[mask] - 1) % len(self._label_cmap)]
         return overlay
-    
-    def render_slice(self, view_name: str, slice_idx: int, 
+
+    def render_slice(self, view_name: str, slice_idx: int,
                     show_overlay: bool = True, alpha: float = 0.5) -> QImage:
-        """
-        Vectorized slice rendering with caching.
-        """
-        cache_key = (view_name, slice_idx, show_overlay, alpha, 
-                    self.view_configs[view_name]['rotation'])
-        
-        # Check cache first
-        if cache_key in self._slice_cache:
-            return self._slice_cache[cache_key]
-        
-        # Get view configuration
+        """Public rendering interface with LRU caching."""
+        rotation = self.view_configs[view_name]['rotation']
+        return self._render_slice_cached(view_name, slice_idx,
+                                         show_overlay and self.global_overlay,
+                                         alpha, rotation)
+
+    @lru_cache(maxsize=100)
+    def _render_slice_cached(self, view_name: str, slice_idx: int,
+                              show_overlay: bool, alpha: float,
+                              rotation: int) -> QImage:
+        """Internal slice renderer that is LRU cached."""
         config = self.view_configs[view_name]
         axis = config['axis']
-        
-        # Extract slices
+
         img_slice = self.get_slice_data(axis, slice_idx, False)
         if img_slice.size == 0:
             return QImage()
-        
-        # Normalize base image
+
         img_normalized = self.normalize_image(img_slice)
-        img_rgb = np.stack([img_normalized] * 3, axis=-1)
-        
-        # Add overlay if enabled
-        if show_overlay and self.label_data is not None and self.global_overlay:
+
+        # Handle overlay if available
+        if show_overlay and self.label_data is not None:
             label_slice = self.get_slice_data(axis, slice_idx, True)
             overlay = self.create_label_overlay(label_slice)
-            
             if overlay is not None:
-                # Vectorized alpha blending
-                mask = overlay[:, :, 3] > 0
-                for c in range(3):
-                    img_rgb[mask, c] = ((1 - alpha) * img_rgb[mask, c] + 
-                                       alpha * overlay[mask, c]).astype(np.uint8)
-        
-        # Apply medical image orientation (flip vertically)
-        img_rgb = np.flipud(img_rgb)
-        
-        # Ensure C-contiguous memory layout for QImage
-        img_rgb = np.ascontiguousarray(img_rgb)
-        
-        # Convert to QImage
-        height, width, channel = img_rgb.shape
-        bytes_per_line = 3 * width
-        qimage = QImage(img_rgb.data, width, height, bytes_per_line, QImage.Format_RGB888)
-        
-        # Apply rotation if needed
-        rotation = config['rotation']
-        if rotation != 0:
+                img_rgb = np.stack([img_normalized] * 3, axis=-1)
+                mask = label_slice > 0
+                img_rgb = img_rgb.astype(np.float32, copy=False)
+                overlay_f = overlay.astype(np.float32, copy=False)
+                img_rgb[mask] = (1 - alpha) * img_rgb[mask] + alpha * overlay_f[mask]
+                img_rgb = img_rgb.astype(np.uint8, copy=False)
+                img_rgb = np.flipud(img_rgb)
+                img_rgb = np.ascontiguousarray(img_rgb)
+                height, width, _ = img_rgb.shape
+                bytes_per_line = 3 * width
+                qimage = QImage(img_rgb.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            else:
+                img_flipped = np.flipud(img_normalized)
+                img_flipped = np.ascontiguousarray(img_flipped)
+                height, width = img_flipped.shape
+                qimage = QImage(img_flipped.data, width, height, img_flipped.strides[0], QImage.Format_Grayscale8)
+        else:
+            img_flipped = np.flipud(img_normalized)
+            img_flipped = np.ascontiguousarray(img_flipped)
+            height, width = img_flipped.shape
+            qimage = QImage(img_flipped.data, width, height, img_flipped.strides[0], QImage.Format_Grayscale8)
+
+        if rotation != 0 and not qimage.isNull():
             transform = QTransform()
             transform.rotate(rotation)
             qimage = qimage.transformed(transform)
-        
-        # Cache management
-        if len(self._slice_cache) >= self._cache_max_size:
-            # Remove oldest entries
-            keys_to_remove = list(self._slice_cache.keys())[:-20]
-            for key in keys_to_remove:
-                del self._slice_cache[key]
-        
-        self._slice_cache[cache_key] = qimage
+
         return qimage
     
     def load_image(self, filepath: str):
         """Load medical image data."""
         try:
+            self.loadProgress.emit(0)
             self.image_data = self._load_image_data(filepath)
             self.image_path = filepath
-            
+            self.loadProgress.emit(70)
+
             # Clear cache when new data is loaded
-            self._slice_cache.clear()
             self.get_slice_data.cache_clear()
-            
+            self._render_slice_cached.cache_clear()
+            QPixmapCache.clear()
+
             # Reset slice positions
             for config in self.view_configs.values():
                 config['slice'] = self.image_data.shape[config['axis']] // 2
-            
+
+            self.loadProgress.emit(100)
             self.imageLoaded.emit(filepath, self.image_data.shape)
-            
+
         except Exception as e:
             self.loadError.emit(f"Failed to load image: {str(e)}")
-    
+
     def load_labels(self, filepath: str):
         """Load medical label data."""
         try:
-            new_label_data = self._load_image_data(filepath)
-            
+            self.loadProgress.emit(0)
+            new_label_data = self._load_image_data(filepath).astype(np.int32)
+            self.loadProgress.emit(70)
+
             # Validate shape compatibility
             if (
-                self.image_data is not None and 
+                self.image_data is not None and
                 new_label_data.shape != self.image_data.shape):
                 self.loadError.emit(
                     f"Label shape {new_label_data.shape} doesn't match "
                     f"image shape {self.image_data.shape}")
                 return
-            
+
             self.label_data = new_label_data
             self.label_path = filepath
-            
+
             # Clear cache
-            self._slice_cache.clear()
-            
+            self.get_slice_data.cache_clear()
+            self._render_slice_cached.cache_clear()
+            QPixmapCache.clear()
+
             unique_labels = len(np.unique(self.label_data))
+            self.loadProgress.emit(100)
             self.labelLoaded.emit(filepath, unique_labels)
-            
+
         except Exception as e:
             self.loadError.emit(f"Failed to load labels: {str(e)}")
     
@@ -409,7 +401,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("Version 0.0.4")
+        version_label = QLabel("Version 0.1.0")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -447,8 +439,8 @@ class AboutDialog(QDialog):
         </table>
         
         <h3 style=\"color: #4a90e2;\">Command Line Options</h3>
-        <p>Run <code>python nifti_viewer_qt.py --help</code> for full options.<br>
-        Examples: <code>-i image.mha -l labels.nii.gz --cache-size 200</code></p>
+        <p>Run <code>python nifti_viewer.py --help</code> for full options.<br>
+        Examples: <code>-i image.mha -l labels.nii.gz</code></p>
         
         <h3 style=\"color: #4a90e2;\">File Support</h3>
         <p>Supports NIfTI (.nii, .nii.gz) and MetaImage (.mha, .mhd) formats.</p>
@@ -474,7 +466,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("版本 0.0.4")
+        version_label = QLabel("版本 0.1.0")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -512,8 +504,8 @@ class AboutDialog(QDialog):
         </table>
         
         <h3 style=\"color: #4a90e2;\">命令行选项</h3>
-        <p>运行 <code>python nifti_viewer_qt.py --help</code> 查看完整选项。<br>
-        示例：<code>-i image.mha -l labels.nii.gz --cache-size 200</code></p>
+        <p>运行 <code>python nifti_viewer.py --help</code> 查看完整选项。<br>
+        示例：<code>-i image.mha -l labels.nii.gz</code></p>
         
         <h3 style=\"color: #4a90e2;\">文件支持</h3>
         <p>支持 NIfTI (.nii, .nii.gz) 和 MetaImage (.mha, .mhd) 格式。</p>
@@ -569,8 +561,11 @@ class SliceView(QGraphicsView):
         if qimage.isNull():
             self.pixmap_item.setPixmap(QPixmap())
             return
-            
-        pixmap = QPixmap.fromImage(qimage)
+        key = str(qimage.cacheKey())
+        pixmap = QPixmapCache.find(key)
+        if pixmap is None:
+            pixmap = QPixmap.fromImage(qimage)
+            QPixmapCache.insert(key, pixmap)
         self.pixmap_item.setPixmap(pixmap)
         
         # Fit in view on first load
@@ -967,6 +962,7 @@ class ViewerController(QObject):
         self.model.imageLoaded.connect(self._on_image_loaded)
         self.model.labelLoaded.connect(self._on_labels_loaded)
         self.model.loadError.connect(self._on_load_error)
+        self.model.loadProgress.connect(self._on_load_progress)
     
     def setup_view_connections(self):
         """Connect main view signals."""
@@ -1027,11 +1023,12 @@ class ViewerController(QObject):
         
         if filepath:
             self.view.status_label.setText("Loading image...")
-            
+
             # Show progress bar if control panel exists
             if hasattr(self.view, 'control_dock') and self.view.control_dock is not None:
+                self.view.progress_bar.setValue(0)
                 self.view.progress_bar.setVisible(True)
-            
+
             # Load in background
             worker = LoadWorker(self.model, filepath, False)
             self.thread_pool.start(worker)
@@ -1047,11 +1044,12 @@ class ViewerController(QObject):
         
         if filepath:
             self.view.status_label.setText("Loading labels...")
-            
+
             # Show progress bar if control panel exists
             if hasattr(self.view, 'control_dock') and self.view.control_dock is not None:
+                self.view.progress_bar.setValue(0)
                 self.view.progress_bar.setVisible(True)
-            
+
             # Load in background
             worker = LoadWorker(self.model, filepath, True)
             self.thread_pool.start(worker)
@@ -1072,6 +1070,7 @@ class ViewerController(QObject):
             return
         
         self.view.status_label.setText("Loading image from path...")
+        self.view.progress_bar.setValue(0)
         self.view.progress_bar.setVisible(True)
         
         # Load in background
@@ -1094,6 +1093,7 @@ class ViewerController(QObject):
             return
         
         self.view.status_label.setText("Loading labels from path...")
+        self.view.progress_bar.setValue(0)
         self.view.progress_bar.setVisible(True)
         
         # Load in background
@@ -1105,8 +1105,9 @@ class ViewerController(QObject):
         # Clear model
         self.model.image_data = None
         self.model.label_data = None
-        self.model._slice_cache.clear()
         self.model.get_slice_data.cache_clear()
+        self.model._render_slice_cached.cache_clear()
+        QPixmapCache.clear()
         
         # Reset UI - check if control panel exists
         if hasattr(self.view, 'control_dock') and self.view.control_dock is not None:
@@ -1282,8 +1283,15 @@ class ViewerController(QObject):
         # Hide progress bar if control panel exists
         if hasattr(self.view, 'control_dock') and self.view.control_dock is not None:
             self.view.progress_bar.setVisible(False)
-            
+
         QMessageBox.critical(self.view, "Load Error", error_msg)
+
+    def _on_load_progress(self, value: int):
+        """Update progress bar during loading."""
+        if hasattr(self.view, 'control_dock') and self.view.control_dock is not None:
+            self.view.progress_bar.setValue(value)
+            if value >= 100:
+                self.view.progress_bar.setVisible(False)
     
     def _toggle_view_visibility(self, view_name: str, visible: bool):
         """Toggle view visibility."""
@@ -1393,29 +1401,28 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(
         prog="nifti_viewer_qt",
-        description="交互式医学影像文件查看器：三视图、标签叠加、可缩放、可旋转。",
+        description="Interactive medical image viewer: three-view display, label overlay, zoomable and rotatable.",
         epilog="""
-快捷键：
-  Ctrl+O     打开影像文件
-  Ctrl+L     打开标签文件  
-  Ctrl+S     保存当前视图为 PNG
-  Ctrl+R     重置视图和缓存
-  Ctrl+T     切换控制面板显示/隐藏
-  Ctrl+Wheel 缩放视图
-  Wheel      切换切片
-  Right-Drag 平移
-  F          适应所有视图
-  F1         关于对话框
+Keyboard Shortcuts:
+  Ctrl+O     Load image file
+  Ctrl+L     Load label file  
+  Ctrl+S     Save current view as PNG
+  Ctrl+R     Reset views and cache
+  Ctrl+T     Toggle control panel visibility
+  Ctrl+Wheel Zoom view
+  Wheel      Navigate slices
+  Right-Drag Pan view
+  F          Fit all views
+  F1         Show about dialog
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("-i", "--image", help="直接加载影像文件 (.nii, .nii.gz, .mha, .mhd)")
-    parser.add_argument("-l", "--label", help="直接加载标签文件 (.nii, .nii.gz, .mha, .mhd)")
-    parser.add_argument("-o", "--output", help="保存截图的默认路径")
-    parser.add_argument("-c", "--cache-size", type=int, default=100, help="设置切片缓存大小（默认 100）")
-    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.0.4")
+    parser.add_argument("-i", "--image", help="Load image file directly (.nii, .nii.gz, .mha, .mhd)")
+    parser.add_argument("-l", "--label", help="Load label file directly (.nii, .nii.gz, .mha, .mhd)")
+    parser.add_argument("-o", "--output", help="Default path for screenshot saving")
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.1.0")
     parser.add_argument("--log-level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
-                        default='INFO', help="设置日志级别")
+                        default='INFO', help="Set logging level")
     
     args = parser.parse_args()
     
@@ -1426,7 +1433,7 @@ def main():
     # Create application
     app = QApplication(sys.argv)
     app.setApplicationName("Medical Image Viewer")
-    app.setApplicationVersion("0.0.4")
+    app.setApplicationVersion("0.1.0")
     
     # Set application style
     app.setStyleSheet("""
@@ -1518,10 +1525,6 @@ def main():
     try:
         # Create MVC components
         model = ImageModel()
-        # Apply cache size setting
-        if args.cache_size:
-            model._cache_max_size = args.cache_size
-            
         view = MainWindow()
         controller = ViewerController(model, view)
         

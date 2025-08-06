@@ -16,7 +16,6 @@ import traceback
 import numpy as np
 import nibabel as nib
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 from PIL import Image
 
 # Conditionally import SimpleITK for MHA support
@@ -81,10 +80,10 @@ class ImageModel(QObject):
         # Global settings
         self.global_overlay = True
         self.global_alpha = 0.5
-        
-        # Performance caching
-        self._slice_cache = {}  # {(view, slice, show_overlay, alpha): QImage}
-        self._cache_max_size = 100
+
+        # Pre-compute label colormap (labels 1-20)
+        cmap = plt.get_cmap('tab20')(np.linspace(0, 1, 20))[:, :3]
+        self._label_cmap = (cmap * 255).astype(np.uint8)
         
     def _load_image_data(self, filepath: str) -> np.ndarray:
         """
@@ -141,87 +140,60 @@ class ImageModel(QObject):
         """Create vectorized colored overlay from label slice."""
         if label_slice.size == 0:
             return None
-            
-        unique_labels = np.unique(label_slice)
-        if len(unique_labels) <= 1:  # Only background
+
+        mask = label_slice > 0
+        if not np.any(mask):
             return None
-        
-        # Vectorized colormap application
-        colormap = plt.get_cmap('tab20')
-        overlay = np.zeros((*label_slice.shape, 4), dtype=np.uint8)
-        
-        for label in unique_labels:
-            if label == 0:  # Skip background
-                continue
-            mask = label_slice == label
-            color = colormap(label / 20.0)
-            overlay[mask] = [int(c * 255) for c in color]
-        
+
+        overlay = np.zeros((*label_slice.shape, 3), dtype=np.uint8)
+        overlay[mask] = self._label_cmap[(label_slice[mask] - 1) % len(self._label_cmap)]
         return overlay
-    
-    def render_slice(self, view_name: str, slice_idx: int, 
+
+    def render_slice(self, view_name: str, slice_idx: int,
                     show_overlay: bool = True, alpha: float = 0.5) -> QImage:
-        """
-        Vectorized slice rendering with caching.
-        """
-        cache_key = (view_name, slice_idx, show_overlay, alpha, 
-                    self.view_configs[view_name]['rotation'])
-        
-        # Check cache first
-        if cache_key in self._slice_cache:
-            return self._slice_cache[cache_key]
-        
-        # Get view configuration
+        """Public rendering interface with LRU caching."""
+        rotation = self.view_configs[view_name]['rotation']
+        return self._render_slice_cached(view_name, slice_idx,
+                                         show_overlay and self.global_overlay,
+                                         alpha, rotation)
+
+    @lru_cache(maxsize=100)
+    def _render_slice_cached(self, view_name: str, slice_idx: int,
+                              show_overlay: bool, alpha: float,
+                              rotation: int) -> QImage:
+        """Internal slice renderer that is LRU cached."""
         config = self.view_configs[view_name]
         axis = config['axis']
-        
-        # Extract slices
+
         img_slice = self.get_slice_data(axis, slice_idx, False)
         if img_slice.size == 0:
             return QImage()
-        
-        # Normalize base image
+
         img_normalized = self.normalize_image(img_slice)
         img_rgb = np.stack([img_normalized] * 3, axis=-1)
-        
-        # Add overlay if enabled
-        if show_overlay and self.label_data is not None and self.global_overlay:
+
+        if show_overlay and self.label_data is not None:
             label_slice = self.get_slice_data(axis, slice_idx, True)
             overlay = self.create_label_overlay(label_slice)
-            
             if overlay is not None:
-                # Vectorized alpha blending
-                mask = overlay[:, :, 3] > 0
-                for c in range(3):
-                    img_rgb[mask, c] = ((1 - alpha) * img_rgb[mask, c] + 
-                                       alpha * overlay[mask, c]).astype(np.uint8)
-        
-        # Apply medical image orientation (flip vertically)
+                mask = label_slice > 0
+                img_rgb = img_rgb.astype(np.float32, copy=False)
+                overlay_f = overlay.astype(np.float32, copy=False)
+                img_rgb[mask] = (1 - alpha) * img_rgb[mask] + alpha * overlay_f[mask]
+                img_rgb = img_rgb.astype(np.uint8, copy=False)
+
         img_rgb = np.flipud(img_rgb)
-        
-        # Ensure C-contiguous memory layout for QImage
         img_rgb = np.ascontiguousarray(img_rgb)
-        
-        # Convert to QImage
+
         height, width, channel = img_rgb.shape
         bytes_per_line = 3 * width
         qimage = QImage(img_rgb.data, width, height, bytes_per_line, QImage.Format_RGB888)
-        
-        # Apply rotation if needed
-        rotation = config['rotation']
+
         if rotation != 0:
             transform = QTransform()
             transform.rotate(rotation)
             qimage = qimage.transformed(transform)
-        
-        # Cache management
-        if len(self._slice_cache) >= self._cache_max_size:
-            # Remove oldest entries
-            keys_to_remove = list(self._slice_cache.keys())[:-20]
-            for key in keys_to_remove:
-                del self._slice_cache[key]
-        
-        self._slice_cache[cache_key] = qimage
+
         return qimage
     
     def load_image(self, filepath: str):
@@ -229,10 +201,10 @@ class ImageModel(QObject):
         try:
             self.image_data = self._load_image_data(filepath)
             self.image_path = filepath
-            
+
             # Clear cache when new data is loaded
-            self._slice_cache.clear()
             self.get_slice_data.cache_clear()
+            self._render_slice_cached.cache_clear()
             
             # Reset slice positions
             for config in self.view_configs.values():
@@ -261,7 +233,8 @@ class ImageModel(QObject):
             self.label_path = filepath
             
             # Clear cache
-            self._slice_cache.clear()
+            self.get_slice_data.cache_clear()
+            self._render_slice_cached.cache_clear()
             
             unique_labels = len(np.unique(self.label_data))
             self.labelLoaded.emit(filepath, unique_labels)
@@ -1105,8 +1078,8 @@ class ViewerController(QObject):
         # Clear model
         self.model.image_data = None
         self.model.label_data = None
-        self.model._slice_cache.clear()
         self.model.get_slice_data.cache_clear()
+        self.model._render_slice_cached.cache_clear()
         
         # Reset UI - check if control panel exists
         if hasattr(self.view, 'control_dock') and self.view.control_dock is not None:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-NIfTI Viewer with PySide 6
-A medical image viewer for NIfTI format files.
+NIfTI/MHA Viewer with PySide 6
+A medical image viewer for NIfTI and MHA format files.
 """
 
 import sys
@@ -18,6 +18,13 @@ import nibabel as nib
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from PIL import Image
+
+# Conditionally import SimpleITK for MHA support
+try:
+    import SimpleITK as sitk
+    SITK_AVAILABLE = True
+except ImportError:
+    SITK_AVAILABLE = False
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -43,8 +50,8 @@ from PySide6.QtGui import (
 
 class ImageModel(QObject):
     """
-    Core data model for NIfTI image and label management.
-    Handles loading, caching, and vectorized rendering.
+    Core data model for medical image and label management.
+    Handles loading, caching, and vectorized rendering for NIfTI and MHA.
     """
     
     # Signals
@@ -79,6 +86,29 @@ class ImageModel(QObject):
         self._slice_cache = {}  # {(view, slice, show_overlay, alpha): QImage}
         self._cache_max_size = 100
         
+    def _load_image_data(self, filepath: str) -> np.ndarray:
+        """
+        Internal helper to load medical image data from various formats.
+        Returns a NumPy array in (X, Y, Z) orientation.
+        """
+        file_ext = "".join(Path(filepath).suffixes).lower()
+
+        if file_ext in ['.nii', '.nii.gz']:
+            img = nib.load(filepath)
+            return img.get_fdata(dtype=np.float32)
+        
+        elif file_ext in ['.mha', '.mhd']:
+            if not SITK_AVAILABLE:
+                raise ImportError("SimpleITK is required to load MHA/MHD files. Please run: pip install SimpleITK")
+            
+            itk_img = sitk.ReadImage(filepath)
+            # Transpose from ITK's (Z, Y, X) to nibabel's (X, Y, Z) convention
+            np_array = sitk.GetArrayFromImage(itk_img)
+            return np_array.transpose(2, 1, 0).astype(np.float32)
+        
+        else:
+            raise ValueError(f"Unsupported file format: {file_ext}")
+
     @lru_cache(maxsize=50)
     def get_slice_data(self, axis: int, slice_idx: int, is_label: bool = False) -> np.ndarray:
         """Extract slice from 3D data with caching."""
@@ -195,10 +225,9 @@ class ImageModel(QObject):
         return qimage
     
     def load_image(self, filepath: str):
-        """Load NIfTI image data."""
+        """Load medical image data."""
         try:
-            img = nib.load(filepath)
-            self.image_data = img.get_fdata(dtype=np.float32)
+            self.image_data = self._load_image_data(filepath)
             self.image_path = filepath
             
             # Clear cache when new data is loaded
@@ -215,13 +244,13 @@ class ImageModel(QObject):
             self.loadError.emit(f"Failed to load image: {str(e)}")
     
     def load_labels(self, filepath: str):
-        """Load NIfTI label data."""
+        """Load medical label data."""
         try:
-            label_img = nib.load(filepath)
-            new_label_data = label_img.get_fdata(dtype=np.float32)
+            new_label_data = self._load_image_data(filepath)
             
             # Validate shape compatibility
-            if (self.image_data is not None and 
+            if (
+                self.image_data is not None and 
                 new_label_data.shape != self.image_data.shape):
                 self.loadError.emit(
                     f"Label shape {new_label_data.shape} doesn't match "
@@ -308,7 +337,7 @@ class AboutDialog(QDialog):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("About NIfTI Viewer")
+        self.setWindowTitle("About Medical Image Viewer")
         self.setFixedSize(600, 500)
         self.setModal(True)
         
@@ -374,13 +403,13 @@ class AboutDialog(QDialog):
         layout = QVBoxLayout(content_widget)
         
         # Main title
-        title_label = QLabel("NIfTI Viewer")
+        title_label = QLabel("Medical Image Viewer")
         title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #4a90e2; margin-bottom: 10px;")
         title_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("Version 0.0.2")
+        version_label = QLabel("Version 0.0.3")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -390,11 +419,11 @@ class AboutDialog(QDialog):
         description.setReadOnly(True)
         description.setMaximumHeight(300)
         description.setHtml("""
-        <h3 style="color: #4a90e2;">What is NIfTI Viewer?</h3>
-        <p>A simple, fast viewer for medical NIfTI images. View MRI scans, overlays, and segmentation masks 
+        <h3 style=\"color: #4a90e2;\">What is this Viewer?</h3>
+        <p>A simple, fast viewer for medical images. View MRI scans, overlays, and segmentation masks 
         in three perspectives simultaneously.</p>
         
-        <h3 style="color: #4a90e2;">How to Use</h3>
+        <h3 style=\"color: #4a90e2;\">How to Use</h3>
         <ul>
             <li><b>Load Files:</b> Use File menu → Load Image/Labels, or type paths in the right panel</li>
             <li><b>Navigate:</b> Mouse wheel scrolls through slices, Ctrl+wheel zooms in/out</li>
@@ -403,26 +432,26 @@ class AboutDialog(QDialog):
             <li><b>Save:</b> File → Save Screenshot or Ctrl+S</li>
         </ul>
         
-        <h3 style="color: #4a90e2;">Keyboard Shortcuts</h3>
-        <table style="width: 100%; border-collapse: collapse;">
-            <tr><td style="padding: 4px;"><b>Ctrl+O</b></td><td style="padding: 4px;">Open image file</td></tr>
-            <tr><td style="padding: 4px;"><b>Ctrl+L</b></td><td style="padding: 4px;">Open label file</td></tr>
-            <tr><td style="padding: 4px;"><b>Ctrl+S</b></td><td style="padding: 4px;">Save screenshot</td></tr>
-            <tr><td style="padding: 4px;"><b>Ctrl+R</b></td><td style="padding: 4px;">Reset views and clear cache</td></tr>
-            <tr><td style="padding: 4px;"><b>Ctrl+T</b></td><td style="padding: 4px;">Toggle control panel</td></tr>
-            <tr><td style="padding: 4px;"><b>F</b></td><td style="padding: 4px;">Fit all views to window</td></tr>
-            <tr><td style="padding: 4px;"><b>F1</b></td><td style="padding: 4px;">Show this dialog</td></tr>
-            <tr><td style="padding: 4px;"><b>Wheel</b></td><td style="padding: 4px;">Scroll through slices</td></tr>
-            <tr><td style="padding: 4px;"><b>Ctrl+Wheel</b></td><td style="padding: 4px;">Zoom in/out</td></tr>
-            <tr><td style="padding: 4px;"><b>Right-drag</b></td><td style="padding: 4px;">Pan view</td></tr>
+        <h3 style=\"color: #4a90e2;\">Keyboard Shortcuts</h3>
+        <table style=\"width: 100%; border-collapse: collapse;">
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+O</b></td><td style=\"padding: 4px;\">Open image file</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+L</b></td><td style=\"padding: 4px;\">Open label file</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+S</b></td><td style=\"padding: 4px;\">Save screenshot</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+R</b></td><td style=\"padding: 4px;\">Reset views and clear cache</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+T</b></td><td style=\"padding: 4px;\">Toggle control panel</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>F</b></td><td style=\"padding: 4px;\">Fit all views to window</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>F1</b></td><td style=\"padding: 4px;\">Show this dialog</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Wheel</b></td><td style=\"padding: 4px;\">Scroll through slices</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+Wheel</b></td><td style=\"padding: 4px;\">Zoom in/out</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Right-drag</b></td><td style=\"padding: 4px;\">Pan view</td></tr>
         </table>
         
-        <h3 style="color: #4a90e2;">Command Line Options</h3>
+        <h3 style=\"color: #4a90e2;\">Command Line Options</h3>
         <p>Run <code>python nifti_viewer_qt.py --help</code> for full options.<br>
-        Examples: <code>-i image.nii -l labels.nii --cache-size 200</code></p>
+        Examples: <code>-i image.mha -l labels.nii.gz --cache-size 200</code></p>
         
-        <h3 style="color: #4a90e2;">File Support</h3>
-        <p>Supports NIfTI format: .nii and .nii.gz files</p>
+        <h3 style=\"color: #4a90e2;\">File Support</h3>
+        <p>Supports NIfTI (.nii, .nii.gz) and MetaImage (.mha, .mhd) formats.</p>
         """)
         layout.addWidget(description)
         
@@ -439,13 +468,13 @@ class AboutDialog(QDialog):
         layout = QVBoxLayout(content_widget)
         
         # Main title
-        title_label = QLabel("NIfTI 医学影像查看器")
+        title_label = QLabel("医学影像查看器")
         title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #4a90e2; margin-bottom: 10px;")
         title_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("版本 0.0.2")
+        version_label = QLabel("版本 0.0.3")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -455,11 +484,11 @@ class AboutDialog(QDialog):
         description.setReadOnly(True)
         description.setMaximumHeight(300)
         description.setHtml("""
-        <h3 style="color: #4a90e2;">什么是 NIfTI 查看器？</h3>
+        <h3 style=\"color: #4a90e2;\">什么是医学影像查看器？</h3>
         <p>简单快速的医学影像查看工具。支持查看磁共振(MRI)扫描图像、叠加图层和分割掩膜，
         同时显示三个角度的切面视图。</p>
         
-        <h3 style="color: #4a90e2;">如何使用</h3>
+        <h3 style=\"color: #4a90e2;\">如何使用</h3>
         <ul>
             <li><b>加载文件：</b>使用文件菜单 → 加载影像/标签，或在右侧面板输入文件路径</li>
             <li><b>导航操作：</b>鼠标滚轮切换切片，Ctrl+滚轮缩放视图</li>
@@ -468,26 +497,26 @@ class AboutDialog(QDialog):
             <li><b>保存截图：</b>文件 → 保存截图或按 Ctrl+S</li>
         </ul>
         
-        <h3 style="color: #4a90e2;">快捷键一览</h3>
-        <table style="width: 100%; border-collapse: collapse;">
-            <tr><td style="padding: 4px;"><b>Ctrl+O</b></td><td style="padding: 4px;">打开影像文件</td></tr>
-            <tr><td style="padding: 4px;"><b>Ctrl+L</b></td><td style="padding: 4px;">打开标签文件</td></tr>
-            <tr><td style="padding: 4px;"><b>Ctrl+S</b></td><td style="padding: 4px;">保存截图</td></tr>
-            <tr><td style="padding: 4px;"><b>Ctrl+R</b></td><td style="padding: 4px;">重置视图并清空缓存</td></tr>
-            <tr><td style="padding: 4px;"><b>Ctrl+T</b></td><td style="padding: 4px;">切换控制面板显示</td></tr>
-            <tr><td style="padding: 4px;"><b>F</b></td><td style="padding: 4px;">适应所有视图到窗口</td></tr>
-            <tr><td style="padding: 4px;"><b>F1</b></td><td style="padding: 4px;">显示此对话框</td></tr>
-            <tr><td style="padding: 4px;"><b>滚轮</b></td><td style="padding: 4px;">切换切片</td></tr>
-            <tr><td style="padding: 4px;"><b>Ctrl+滚轮</b></td><td style="padding: 4px;">缩放视图</td></tr>
-            <tr><td style="padding: 4px;"><b>右键拖拽</b></td><td style="padding: 4px;">平移视图</td></tr>
+        <h3 style=\"color: #4a90e2;\">快捷键一览</h3>
+        <table style=\"width: 100%; border-collapse: collapse;">
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+O</b></td><td style=\"padding: 4px;\">打开影像文件</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+L</b></td><td style=\"padding: 4px;\">打开标签文件</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+S</b></td><td style=\"padding: 4px;\">保存截图</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+R</b></td><td style=\"padding: 4px;\">重置视图并清空缓存</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+T</b></td><td style=\"padding: 4px;\">切换控制面板显示</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>F</b></td><td style=\"padding: 4px;\">适应所有视图到窗口</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>F1</b></td><td style=\"padding: 4px;\">显示此对话框</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>滚轮</b></td><td style=\"padding: 4px;\">切换切片</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+滚轮</b></td><td style=\"padding: 4px;\">缩放视图</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>右键拖拽</b></td><td style=\"padding: 4px;\">平移视图</td></tr>
         </table>
         
-        <h3 style="color: #4a90e2;">命令行选项</h3>
+        <h3 style=\"color: #4a90e2;\">命令行选项</h3>
         <p>运行 <code>python nifti_viewer_qt.py --help</code> 查看完整选项。<br>
-        示例：<code>-i image.nii -l labels.nii --cache-size 200</code></p>
+        示例：<code>-i image.mha -l labels.nii.gz --cache-size 200</code></p>
         
-        <h3 style="color: #4a90e2;">文件支持</h3>
-        <p>支持 NIfTI 格式：.nii 和 .nii.gz 文件</p>
+        <h3 style=\"color: #4a90e2;\">文件支持</h3>
+        <p>支持 NIfTI (.nii, .nii.gz) 和 MetaImage (.mha, .mhd) 格式。</p>
         """)
         layout.addWidget(description)
         
@@ -616,7 +645,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
-        self.setWindowTitle("NIfTI Viewer")
+        self.setWindowTitle("Medical Image Viewer")
         self.setMinimumSize(1200, 800)
         self.resize(1400, 900)  # Set a good default size
         
@@ -669,18 +698,24 @@ class MainWindow(QMainWindow):
         self.setup_control_dock()
     
     def setup_control_dock(self):
-        """Create docked control panel."""
+        """Create docked control panel with a scroll area."""
         self.control_dock = QDockWidget("Controls", self)
         self.control_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
-        
-        dock_widget = QWidget()
-        dock_layout = QVBoxLayout(dock_widget)
-        
+
+        # Create a scroll area
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        # Main container widget for all controls that will be placed inside the scroll area
+        main_controls_widget = QWidget()
+        dock_layout = QVBoxLayout(main_controls_widget)
+
         # File controls
         file_group = QGroupBox("File Operations")
         file_layout = QVBoxLayout(file_group)
         
-        # Load buttons
         self.load_image_btn = QPushButton("Load Image (Ctrl+O)")
         self.load_labels_btn = QPushButton("Load Labels (Ctrl+L)")
         self.reset_btn = QPushButton("Reset (Ctrl+R)")
@@ -689,8 +724,6 @@ class MainWindow(QMainWindow):
         file_layout.addWidget(self.load_labels_btn)
         file_layout.addWidget(self.reset_btn)
         
-        # File path inputs
-        # Image path input
         file_layout.addWidget(QLabel("Image Path:"))
         self.image_path_input = QLineEdit()
         self.image_path_input.setPlaceholderText("No image loaded...")
@@ -699,7 +732,6 @@ class MainWindow(QMainWindow):
         self.update_image_btn = QPushButton("Update Image")
         file_layout.addWidget(self.update_image_btn)
         
-        # Label path input
         file_layout.addWidget(QLabel("Label Path:"))
         self.label_path_input = QLineEdit()
         self.label_path_input.setPlaceholderText("No labels loaded...")
@@ -714,7 +746,6 @@ class MainWindow(QMainWindow):
         view_group = QGroupBox("View Controls")
         view_layout = QGridLayout(view_group)
         
-        # View visibility checkboxes
         self.view_checkboxes = {}
         view_names = ['axial', 'sagittal', 'coronal']
         for i, name in enumerate(view_names):
@@ -727,23 +758,20 @@ class MainWindow(QMainWindow):
         
         # Slice controls for each view
         self.slice_controls = {}
-        for i, name in enumerate(view_names):
+        for name in view_names:
             slice_group = QGroupBox(f"{name.title()} Slice")
             slice_layout = QVBoxLayout(slice_group)
             
-            # Slice slider
             slider = QSlider(Qt.Horizontal)
             slider.setMinimum(0)
             slider.setMaximum(100)
             slider.setValue(50)
             
-            # Slice spinbox
             spinbox = QSpinBox()
             spinbox.setMinimum(0)
             spinbox.setMaximum(100)
             spinbox.setValue(50)
             
-            # Rotation button
             rotate_btn = QPushButton("Rotate 90°")
             
             slice_layout.addWidget(QLabel("Slice:"))
@@ -783,12 +811,17 @@ class MainWindow(QMainWindow):
         dock_layout.addWidget(self.progress_bar)
         
         dock_layout.addStretch()
-        self.control_dock.setWidget(dock_widget)
+
+        # Set the main controls widget into the scroll area
+        scroll_area.setWidget(main_controls_widget)
+        
+        # Set the scroll area as the widget for the dock
+        self.control_dock.setWidget(scroll_area)
         
         # Set initial size constraints for the control dock
-        self.control_dock.setMinimumWidth(250)
-        self.control_dock.setMaximumWidth(400)
-        self.control_dock.resize(300, self.control_dock.height())
+        self.control_dock.setMinimumWidth(300)
+        self.control_dock.setMaximumWidth(450)
+        self.control_dock.resize(320, self.control_dock.height())
         
         self.addDockWidget(Qt.RightDockWidgetArea, self.control_dock)
     
@@ -996,9 +1029,9 @@ class ViewerController(QObject):
         """Load image file dialog."""
         filepath, _ = QFileDialog.getOpenFileName(
             self.view,
-            "Load NIfTI Image",
+            "Load Medical Image",
             "",
-            "NIfTI Files (*.nii *.nii.gz);;All Files (*)"
+            "Image Files (*.nii *.nii.gz *.mha *.mhd);;All Files (*)"
         )
         
         if filepath:
@@ -1016,9 +1049,9 @@ class ViewerController(QObject):
         """Load labels file dialog."""
         filepath, _ = QFileDialog.getOpenFileName(
             self.view,
-            "Load NIfTI Labels",
+            "Load Medical Labels",
             "",
-            "NIfTI Files (*.nii *.nii.gz);;All Files (*)"
+            "Label Files (*.nii *.nii.gz *.mha *.mhd);;All Files (*)"
         )
         
         if filepath:
@@ -1369,7 +1402,7 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(
         prog="nifti_viewer_qt",
-        description="交互式 NIfTI 文件查看器：三视图、标签叠加、可缩放、可旋转。",
+        description="交互式医学影像文件查看器：三视图、标签叠加、可缩放、可旋转。",
         epilog="""
 快捷键：
   Ctrl+O     打开影像文件
@@ -1385,11 +1418,11 @@ def main():
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("-i", "--image", help="直接加载影像文件 (.nii/.nii.gz)")
-    parser.add_argument("-l", "--label", help="直接加载标签文件 (.nii/.nii.gz)")
+    parser.add_argument("-i", "--image", help="直接加载影像文件 (.nii, .nii.gz, .mha, .mhd)")
+    parser.add_argument("-l", "--label", help="直接加载标签文件 (.nii, .nii.gz, .mha, .mhd)")
     parser.add_argument("-o", "--output", help="保存截图的默认路径")
     parser.add_argument("-c", "--cache-size", type=int, default=100, help="设置切片缓存大小（默认 100）")
-    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.0.2")
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.0.3")
     parser.add_argument("--log-level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
                         default='INFO', help="设置日志级别")
     
@@ -1401,8 +1434,8 @@ def main():
     
     # Create application
     app = QApplication(sys.argv)
-    app.setApplicationName("NIfTI Viewer Qt")
-    app.setApplicationVersion("0.0.2")
+    app.setApplicationName("Medical Image Viewer")
+    app.setApplicationVersion("0.0.3")
     
     # Set application style
     app.setStyleSheet("""

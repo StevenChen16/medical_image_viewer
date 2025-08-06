@@ -142,12 +142,13 @@ class ImageModel(QObject):
         if label_slice.size == 0:
             return None
 
-        mask = label_slice > 0
+        labels = label_slice.astype(np.intp, copy=False)
+        mask = labels > 0
         if not np.any(mask):
             return None
 
         overlay = np.zeros((*label_slice.shape, 3), dtype=np.uint8)
-        overlay[mask] = self._label_cmap[(label_slice[mask] - 1) % len(self._label_cmap)]
+        overlay[mask] = self._label_cmap[(labels[mask] - 1) % len(self._label_cmap)]
         return overlay
 
     def render_slice(self, view_name: str, slice_idx: int,
@@ -233,7 +234,7 @@ class ImageModel(QObject):
         """Load medical label data."""
         try:
             self.loadProgress.emit(0)
-            new_label_data = self._load_image_data(filepath)
+            new_label_data = self._load_image_data(filepath).astype(np.int32)
             self.loadProgress.emit(70)
 
             # Validate shape compatibility

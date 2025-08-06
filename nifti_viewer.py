@@ -55,7 +55,7 @@ class ColorButton(QPushButton):
     def __init__(self, *args, color=None, **kwargs):
         super().__init__(*args, **kwargs)
         if color is None:
-            self._color = QColor(166, 206, 227)  # Default to first ColorBrewer color
+            self._color = QColor(227, 26, 28)  # Default to first enhanced color (red)
         elif isinstance(color, (list, tuple)) and len(color) == 3:
             self._color = QColor(*color)  # Unpack RGB tuple
         elif isinstance(color, QColor):
@@ -155,12 +155,22 @@ class ImageModel(QObject):
         self.global_overlay = True
         self.global_alpha = 0.5
 
-        # Medical-grade ColorBrewer Paired palette (12 colors) - used as defaults
-        # Color-blind friendly, perceptually uniform, clinically tested
+        # Medical-optimized ColorBrewer Paired palette - reordered for maximum contrast
+        # Alternates between different hue families for better medical visualization
+        # Original ColorBrewer colors maintained but resequenced for consecutive contrast
         self._default_colors = [
-            (166, 206, 227), ( 31, 120, 180), (178, 223, 138), ( 51, 160,  44),
-            (251, 154, 153), (227,  26,  28), (253, 191, 111), (255, 127,   0),
-            (202, 178, 214), (106,  61, 154), (255, 255, 153), (177,  89,  40),
+            (227,  26,  28), # 1. Red - high contrast, medically significant
+            (178, 223, 138), # 2. Light green - strong contrast to red
+            ( 31, 120, 180), # 3. Dark blue - distinct from green
+            (253, 191, 111), # 4. Orange - warm contrast to blue
+            (106,  61, 154), # 5. Purple - cool contrast to orange
+            (255, 255, 153), # 6. Yellow - bright contrast to purple
+            (166, 206, 227), # 7. Light blue - different from dark blue above
+            (177,  89,  40), # 8. Brown - earth tone contrast
+            (251, 154, 153), # 9. Light red - softer than primary red
+            ( 51, 160,  44), # 10. Dark green - different from light green
+            (255, 127,   0), # 11. Dark orange - vibrant accent
+            (202, 178, 214), # 12. Light purple - subtle final color
         ]
         
         # Dynamic color mapping: label_value -> (r, g, b) tuple
@@ -413,17 +423,81 @@ class ImageModel(QObject):
         return 0
     
     def get_label_color(self, label_value: int) -> Tuple[int, int, int]:
-        """Get RGB color for a specific label value."""
+        """Get RGB color for a specific label value with medical imaging optimization."""
         if label_value == 0:
             return (0, 0, 0)  # Background is always black
             
         # Check if user has customized this label
         if label_value in self._custom_label_colors:
-            return self._custom_label_colors[label_value]
-            
-        # Use default ColorBrewer color cycling through the palette
-        color_idx = (label_value - 1) % len(self._default_colors)
-        return self._default_colors[color_idx]
+            base_color = self._custom_label_colors[label_value]
+        else:
+            # Use default ColorBrewer color cycling through the palette
+            color_idx = (label_value - 1) % len(self._default_colors)
+            base_color = self._default_colors[color_idx]
+        
+        # Apply medical imaging contrast enhancement
+        return self._enhance_color_for_medical_display(base_color)
+    
+    def _enhance_color_for_medical_display(self, color: Tuple[int, int, int]) -> Tuple[int, int, int]:
+        """
+        Enhance color contrast for medical imaging dark backgrounds.
+        Boosts brightness and saturation while preserving hue relationships.
+        """
+        r, g, b = color
+        
+        # Convert to HSV for easier manipulation
+        r_norm, g_norm, b_norm = r/255.0, g/255.0, b/255.0
+        max_val = max(r_norm, g_norm, b_norm)
+        min_val = min(r_norm, g_norm, b_norm)
+        diff = max_val - min_val
+        
+        # Calculate HSV values
+        if diff == 0:
+            hue = 0
+        elif max_val == r_norm:
+            hue = (60 * ((g_norm - b_norm) / diff) + 360) % 360
+        elif max_val == g_norm:
+            hue = (60 * ((b_norm - r_norm) / diff) + 120) % 360
+        else:
+            hue = (60 * ((r_norm - g_norm) / diff) + 240) % 360
+        
+        saturation = 0 if max_val == 0 else diff / max_val
+        value = max_val
+        
+        # Medical imaging enhancement:
+        # 1. Boost saturation for better distinction
+        enhanced_saturation = min(1.0, saturation * 1.3)
+        
+        # 2. Increase brightness for dark background visibility  
+        enhanced_value = min(1.0, value * 1.2)
+        
+        # 3. Ensure minimum brightness for very dark colors
+        enhanced_value = max(0.4, enhanced_value)
+        
+        # Convert back to RGB
+        c = enhanced_value * enhanced_saturation
+        x = c * (1 - abs((hue / 60) % 2 - 1))
+        m = enhanced_value - c
+        
+        if 0 <= hue < 60:
+            r_prime, g_prime, b_prime = c, x, 0
+        elif 60 <= hue < 120:
+            r_prime, g_prime, b_prime = x, c, 0
+        elif 120 <= hue < 180:
+            r_prime, g_prime, b_prime = 0, c, x
+        elif 180 <= hue < 240:
+            r_prime, g_prime, b_prime = 0, x, c
+        elif 240 <= hue < 300:
+            r_prime, g_prime, b_prime = x, 0, c
+        else:
+            r_prime, g_prime, b_prime = c, 0, x
+        
+        # Convert back to 0-255 range
+        enhanced_r = int(min(255, max(0, (r_prime + m) * 255)))
+        enhanced_g = int(min(255, max(0, (g_prime + m) * 255)))
+        enhanced_b = int(min(255, max(0, (b_prime + m) * 255)))
+        
+        return (enhanced_r, enhanced_g, enhanced_b)
     
     def set_label_color(self, label_value: int, color: Tuple[int, int, int]) -> None:
         """Set custom color for a specific label value."""
@@ -1679,7 +1753,6 @@ class ViewerController(QObject):
             # Show exactly 10 labels, allow scrolling for more
             optimal_height = 10 * row_height + base_padding
         
-        print(f"Setting label colors height to {optimal_height}px for {num_labels} labels")  # Debug output
         self.view.label_colors_scroll.setFixedHeight(optimal_height)
         
         # Make the group visible and expanded

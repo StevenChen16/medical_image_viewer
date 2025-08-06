@@ -409,7 +409,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("Version 0.0.3")
+        version_label = QLabel("Version 0.0.4")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -474,7 +474,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("版本 0.0.3")
+        version_label = QLabel("版本 0.0.4")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -646,6 +646,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         self.setWindowTitle("Medical Image Viewer")
+        self.setWindowIcon(QIcon("media/logo.png"))
         self.setMinimumSize(1200, 800)
         self.resize(1400, 900)  # Set a good default size
         
@@ -698,54 +699,59 @@ class MainWindow(QMainWindow):
         self.setup_control_dock()
     
     def setup_control_dock(self):
-        """Create docked control panel with a scroll area."""
+        """Create docked control panel with collapsible sections."""
         self.control_dock = QDockWidget("Controls", self)
         self.control_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
 
-        # Create a scroll area
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        # Main container widget for all controls that will be placed inside the scroll area
         main_controls_widget = QWidget()
         dock_layout = QVBoxLayout(main_controls_widget)
 
+        # Helper function to create a collapsible group
+        def create_collapsible_group(title: str, layout):
+            group_box = QGroupBox(title)
+            group_box.setCheckable(True)
+            
+            content_widget = QWidget()
+            content_widget.setLayout(layout)
+            
+            group_box_layout = QVBoxLayout(group_box)
+            group_box_layout.setContentsMargins(4, 10, 4, 4)
+            group_box_layout.addWidget(content_widget)
+            
+            group_box.toggled.connect(content_widget.setVisible)
+            group_box.setChecked(True)
+            return group_box
+
         # File controls
-        file_group = QGroupBox("File Operations")
-        file_layout = QVBoxLayout(file_group)
-        
+        file_layout = QVBoxLayout()
         self.load_image_btn = QPushButton("Load Image (Ctrl+O)")
         self.load_labels_btn = QPushButton("Load Labels (Ctrl+L)")
         self.reset_btn = QPushButton("Reset (Ctrl+R)")
-        
         file_layout.addWidget(self.load_image_btn)
         file_layout.addWidget(self.load_labels_btn)
         file_layout.addWidget(self.reset_btn)
-        
         file_layout.addWidget(QLabel("Image Path:"))
         self.image_path_input = QLineEdit()
         self.image_path_input.setPlaceholderText("No image loaded...")
         file_layout.addWidget(self.image_path_input)
-        
         self.update_image_btn = QPushButton("Update Image")
         file_layout.addWidget(self.update_image_btn)
-        
         file_layout.addWidget(QLabel("Label Path:"))
         self.label_path_input = QLineEdit()
         self.label_path_input.setPlaceholderText("No labels loaded...")
         file_layout.addWidget(self.label_path_input)
-        
         self.update_labels_btn = QPushButton("Update Labels")
         file_layout.addWidget(self.update_labels_btn)
-        
+        file_group = create_collapsible_group("File Operations", file_layout)
         dock_layout.addWidget(file_group)
-        
+
         # View controls
-        view_group = QGroupBox("View Controls")
-        view_layout = QGridLayout(view_group)
-        
+        view_layout = QGridLayout()
         self.view_checkboxes = {}
         view_names = ['axial', 'sagittal', 'coronal']
         for i, name in enumerate(view_names):
@@ -753,58 +759,47 @@ class MainWindow(QMainWindow):
             checkbox.setChecked(True)
             self.view_checkboxes[name] = checkbox
             view_layout.addWidget(checkbox, 0, i)
-        
+        view_group = create_collapsible_group("View Controls", view_layout)
         dock_layout.addWidget(view_group)
-        
-        # Slice controls for each view
+
+        # Slice controls
         self.slice_controls = {}
         for name in view_names:
-            slice_group = QGroupBox(f"{name.title()} Slice")
-            slice_layout = QVBoxLayout(slice_group)
-            
+            slice_layout = QVBoxLayout()
             slider = QSlider(Qt.Horizontal)
             slider.setMinimum(0)
             slider.setMaximum(100)
             slider.setValue(50)
-            
             spinbox = QSpinBox()
             spinbox.setMinimum(0)
             spinbox.setMaximum(100)
             spinbox.setValue(50)
-            
             rotate_btn = QPushButton("Rotate 90°")
-            
             slice_layout.addWidget(QLabel("Slice:"))
             slice_layout.addWidget(slider)
             slice_layout.addWidget(spinbox)
             slice_layout.addWidget(rotate_btn)
-            
             self.slice_controls[name] = {
-                'slider': slider,
-                'spinbox': spinbox,
-                'rotate_btn': rotate_btn
+                'slider': slider, 'spinbox': spinbox, 'rotate_btn': rotate_btn
             }
-            
+            slice_group = create_collapsible_group(f"{name.title()} Slice", slice_layout)
             dock_layout.addWidget(slice_group)
-        
+
         # Overlay controls
-        overlay_group = QGroupBox("Overlay Controls")
-        overlay_layout = QVBoxLayout(overlay_group)
-        
+        overlay_layout = QVBoxLayout()
         self.global_overlay_cb = QCheckBox("Show Overlay")
         self.global_overlay_cb.setChecked(True)
-        
         self.alpha_label = QLabel("Alpha: 0.50")
         self.alpha_slider = QSlider(Qt.Horizontal)
         self.alpha_slider.setMinimum(0)
         self.alpha_slider.setMaximum(100)
         self.alpha_slider.setValue(50)
-        
         overlay_layout.addWidget(self.global_overlay_cb)
         overlay_layout.addWidget(self.alpha_label)
         overlay_layout.addWidget(self.alpha_slider)
+        overlay_group = create_collapsible_group("Overlay Controls", overlay_layout)
         dock_layout.addWidget(overlay_group)
-        
+
         # Progress bar
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -812,13 +807,9 @@ class MainWindow(QMainWindow):
         
         dock_layout.addStretch()
 
-        # Set the main controls widget into the scroll area
         scroll_area.setWidget(main_controls_widget)
-        
-        # Set the scroll area as the widget for the dock
         self.control_dock.setWidget(scroll_area)
         
-        # Set initial size constraints for the control dock
         self.control_dock.setMinimumWidth(300)
         self.control_dock.setMaximumWidth(450)
         self.control_dock.resize(320, self.control_dock.height())
@@ -1422,7 +1413,7 @@ def main():
     parser.add_argument("-l", "--label", help="直接加载标签文件 (.nii, .nii.gz, .mha, .mhd)")
     parser.add_argument("-o", "--output", help="保存截图的默认路径")
     parser.add_argument("-c", "--cache-size", type=int, default=100, help="设置切片缓存大小（默认 100）")
-    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.0.3")
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.0.4")
     parser.add_argument("--log-level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
                         default='INFO', help="设置日志级别")
     
@@ -1435,7 +1426,7 @@ def main():
     # Create application
     app = QApplication(sys.argv)
     app.setApplicationName("Medical Image Viewer")
-    app.setApplicationVersion("0.0.3")
+    app.setApplicationVersion("0.0.4")
     
     # Set application style
     app.setStyleSheet("""
@@ -1457,6 +1448,17 @@ def main():
             subcontrol-origin: margin;
             left: 10px;
             padding: 0 5px 0 5px;
+        }
+        QGroupBox::indicator {
+            width: 18px;
+            height: 18px;
+            right: 5px;
+        }
+        QGroupBox::indicator:unchecked {
+            image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBmaWxsPSJjdXJyZW50Q29sb3IiPjxwYXRoIGQ9Ik0wIDBoMjR2MjRIMDB6IiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTEwIDE3bDUtNS01LTV2MTB6Ii8+PC9zdmc+);
+        }
+        QGroupBox::indicator:checked {
+            image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBmaWxsPSJjdXJyZW50Q29sb3IiPjxwYXRoIGQ9Ik0wIDBoMjR2MjRIMDB6IiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTcgMTBsNSA1IDUtNXoiLz48L3N2Zz4=);
         }
         QPushButton {
             background-color: #4a4a4a;

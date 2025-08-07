@@ -4,6 +4,8 @@ NIfTI/MHA Viewer with PySide 6
 A medical image viewer for NIfTI and MHA format files.
 """
 
+__version__ = "0.1.3"
+
 import sys
 import os
 import logging
@@ -731,7 +733,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("Version 0.1.2")
+        version_label = QLabel("Version 0.1.3")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -797,7 +799,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("版本 0.1.2")
+        version_label = QLabel("版本 0.1.3")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -2021,7 +2023,7 @@ Keyboard Shortcuts:
                         help="QPixmapCache size in KB (default: 100MB)")
     parser.add_argument("--preload-count", type=int, default=2, 
                         help="Number of adjacent slices to preload (default: 2)")
-    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.1.2")
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.1.3")
     parser.add_argument("--log-level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
                         default='INFO', help="Set logging level")
     
@@ -2034,7 +2036,7 @@ Keyboard Shortcuts:
     # Create application
     app = QApplication(sys.argv)
     app.setApplicationName("Medical Image Viewer")
-    app.setApplicationVersion("0.1.2")
+    app.setApplicationVersion("0.1.3")
     
     # Set application style
     app.setStyleSheet("""

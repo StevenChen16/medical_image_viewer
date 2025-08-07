@@ -5,6 +5,10 @@ A medical image viewer for NIfTI and MHA format files.
 """
 
 __version__ = "0.1.3"
+__author__ = "Steven Chen"
+__license__ = "MIT"
+__copyright__ = "Copyright 2025, Steven Chen"
+__all__ = ['MainWindow', 'ViewerController', 'ImageModel', 'main']
 
 import sys
 import os

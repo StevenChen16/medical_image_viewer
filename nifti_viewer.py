@@ -269,10 +269,31 @@ class ImageModel(QObject):
                 overlay[label_mask] = color
 
         return overlay
+    @staticmethod
+    def strip_extensions(path: str) -> str:
+        """Remove all suffixes from a file path."""
+        p = Path(path)
+        for _ in p.suffixes:
+            p = p.with_suffix('')
+        return str(p)
 
-    def save_volume(self, data: np.ndarray, reference_path: str, out_path: str) -> None:
+    def _normalize_output_path(self, out_path: str) -> Tuple[str, str]:
+        """Ensure path has a single valid extension and return (path, ext)."""
+        p = Path(out_path)
+        suffixes = p.suffixes
+        if suffixes[-2:] == ['.nii', '.gz']:
+            ext = '.nii.gz'
+        elif suffixes:
+            ext = suffixes[-1].lower()
+        else:
+            raise ValueError("Output path must have an extension")
+
+        base = Path(self.strip_extensions(out_path))
+        return str(base.with_suffix(ext)), ext
+
+    def save_volume(self, data: np.ndarray, reference_path: str, out_path: str) -> str:
         """Save a 3D volume to disk using reference metadata."""
-        ext = "".join(Path(out_path).suffixes).lower()
+        out_path, ext = self._normalize_output_path(out_path)
         if ext in ['.nii', '.nii.gz']:
             ref_img = nib.load(reference_path)
             img = nib.Nifti1Image(data, ref_img.affine, ref_img.header)
@@ -290,6 +311,7 @@ class ImageModel(QObject):
             sitk.WriteImage(itk_img, out_path)
         else:
             raise ValueError(f"Unsupported format: {ext}")
+        return out_path
 
     def make_overlay_volume(self) -> np.ndarray:
         """Generate blended overlay volume from image and label data."""
@@ -1522,11 +1544,11 @@ class ViewerController(QObject):
             QMessageBox.warning(self.view, "Warning", "No image loaded.")
             return
         filters = "NIfTI (*.nii *.nii.gz);;MetaImage (*.mha *.mhd);;All Files (*)"
-        default = self.model.image_path or ""
+        default = self.model.strip_extensions(self.model.image_path) if self.model.image_path else ""
         path, _ = QFileDialog.getSaveFileName(self.view, "Save Image Only", default, filters)
         if path:
             try:
-                self.model.save_volume(self.model.image_data, self.model.image_path, path)
+                path = self.model.save_volume(self.model.image_data, self.model.image_path, path)
                 self.view.status_label.setText(f"Image saved: {Path(path).name}")
             except Exception as e:
                 QMessageBox.critical(self.view, "Error", str(e))
@@ -1536,11 +1558,11 @@ class ViewerController(QObject):
             QMessageBox.warning(self.view, "Warning", "No label loaded.")
             return
         filters = "NIfTI (*.nii *.nii.gz);;MetaImage (*.mha *.mhd);;All Files (*)"
-        default = self.model.label_path or ""
+        default = self.model.strip_extensions(self.model.label_path) if self.model.label_path else ""
         path, _ = QFileDialog.getSaveFileName(self.view, "Save Label Only", default, filters)
         if path:
             try:
-                self.model.save_volume(self.model.label_data, self.model.label_path, path)
+                path = self.model.save_volume(self.model.label_data, self.model.label_path, path)
                 self.view.status_label.setText(f"Label saved: {Path(path).name}")
             except Exception as e:
                 QMessageBox.critical(self.view, "Error", str(e))
@@ -1550,12 +1572,12 @@ class ViewerController(QObject):
             QMessageBox.warning(self.view, "Warning", "Need both image and label loaded.")
             return
         filters = "NIfTI (*.nii *.nii.gz);;MetaImage (*.mha *.mhd);;All Files (*)"
-        default = self.model.image_path or ""
+        default = self.model.strip_extensions(self.model.image_path) if self.model.image_path else ""
         path, _ = QFileDialog.getSaveFileName(self.view, "Save Overlay Image", default, filters)
         if path:
             try:
                 overlay_vol = self.model.make_overlay_volume()
-                self.model.save_volume(overlay_vol, self.model.image_path, path)
+                path = self.model.save_volume(overlay_vol, self.model.image_path, path)
                 self.view.status_label.setText(f"Overlay saved: {Path(path).name}")
             except Exception as e:
                 QMessageBox.critical(self.view, "Error", str(e))

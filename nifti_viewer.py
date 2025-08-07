@@ -281,8 +281,12 @@ class ImageModel(QObject):
             if not SITK_AVAILABLE:
                 raise RuntimeError("SimpleITK is required to save MHA/MHD files")
             ref_img = sitk.ReadImage(reference_path)
-            itk_img = sitk.GetImageFromArray(data)
+            # Transpose from nibabel's (X, Y, Z) to ITK's (Z, Y, X) convention
+            arr = np.transpose(data, (2, 1, 0))
+            itk_img = sitk.GetImageFromArray(arr)
             itk_img.SetSpacing(ref_img.GetSpacing())
+            itk_img.SetDirection(ref_img.GetDirection())
+            itk_img.SetOrigin(ref_img.GetOrigin())
             sitk.WriteImage(itk_img, out_path)
         else:
             raise ValueError(f"Unsupported format: {ext}")

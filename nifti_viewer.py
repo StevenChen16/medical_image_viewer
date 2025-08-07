@@ -39,7 +39,8 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QPixmap, QPainter, QImage, QPen, QBrush, QColor, QTransform,
-    QAction, QIcon, QFont, QWheelEvent, QMouseEvent, QPixmapCache
+    QAction, QIcon, QFont, QWheelEvent, QMouseEvent, QPixmapCache,
+    QShortcut, QCursor
 )
 
 
@@ -724,7 +725,7 @@ class AboutDialog(QDialog):
             <li><b>Navigate:</b> Mouse wheel scrolls through slices, Ctrl+wheel zooms in/out</li>
             <li><b>Pan & Rotate:</b> Right-click drag to move view, click rotation buttons to flip</li>
             <li><b>Overlays:</b> Check "Show Overlay" and adjust transparency slider</li>
-            <li><b>Save:</b> File → Save Screenshot or Ctrl+S</li>
+            <li><b>Save:</b> File → Save Screenshot (Ctrl+S) or Volume (Ctrl+Shift+S)</li>
         </ul>
         
         <h3 style=\"color: #4a90e2;\">Keyboard Shortcuts</h3>
@@ -732,6 +733,7 @@ class AboutDialog(QDialog):
             <tr><td style=\"padding: 4px;\"><b>Ctrl+O</b></td><td style=\"padding: 4px;\">Open image file</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+L</b></td><td style=\"padding: 4px;\">Open label file</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+S</b></td><td style=\"padding: 4px;\">Save screenshot</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+Shift+S</b></td><td style=\"padding: 4px;\">Open volume save menu</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+R</b></td><td style=\"padding: 4px;\">Reset views and clear cache</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+T</b></td><td style=\"padding: 4px;\">Toggle control panel</td></tr>
             <tr><td style=\"padding: 4px;\"><b>F</b></td><td style=\"padding: 4px;\">Fit all views to window</td></tr>
@@ -789,7 +791,7 @@ class AboutDialog(QDialog):
             <li><b>导航操作：</b>鼠标滚轮切换切片，Ctrl+滚轮缩放视图</li>
             <li><b>平移旋转：</b>右键拖拽移动视图，点击旋转按钮翻转方向</li>
             <li><b>叠加显示：</b>勾选"显示叠加"并调节透明度滑条</li>
-            <li><b>保存截图：</b>文件 → 保存截图或按 Ctrl+S</li>
+            <li><b>保存：</b>文件 → 保存截图 (Ctrl+S) 或保存体数据 (Ctrl+Shift+S)</li>
         </ul>
         
         <h3 style=\"color: #4a90e2;\">快捷键一览</h3>
@@ -797,6 +799,7 @@ class AboutDialog(QDialog):
             <tr><td style=\"padding: 4px;\"><b>Ctrl+O</b></td><td style=\"padding: 4px;\">打开影像文件</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+L</b></td><td style=\"padding: 4px;\">打开标签文件</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+S</b></td><td style=\"padding: 4px;\">保存截图</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+Shift+S</b></td><td style=\"padding: 4px;\">打开体数据保存菜单</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+R</b></td><td style=\"padding: 4px;\">重置视图并清空缓存</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+T</b></td><td style=\"padding: 4px;\">切换控制面板显示</td></tr>
             <tr><td style=\"padding: 4px;\"><b>F</b></td><td style=\"padding: 4px;\">适应所有视图到窗口</td></tr>
@@ -1212,6 +1215,10 @@ class MainWindow(QMainWindow):
         save_submenu.addAction(save_image_action)
         save_submenu.addAction(save_label_action)
         save_submenu.addAction(save_overlay_action)
+
+        # Shortcut to quickly open the Save submenu
+        self.save_shortcut = QShortcut("Ctrl+Shift+S", self)
+        self.save_shortcut.activated.connect(lambda: save_submenu.exec(QCursor.pos()))
 
         file_menu.addSeparator()
 

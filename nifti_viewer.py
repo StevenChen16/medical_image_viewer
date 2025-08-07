@@ -266,8 +266,52 @@ class ImageModel(QObject):
                 label_mask = labels == label_val
                 color = self.get_label_color(label_val)
                 overlay[label_mask] = color
-        
+
         return overlay
+
+    def save_volume(self, data: np.ndarray, reference_path: str, out_path: str) -> None:
+        """Save a 3D volume to disk using reference metadata."""
+        ext = "".join(Path(out_path).suffixes).lower()
+        if ext in ['.nii', '.nii.gz']:
+            ref_img = nib.load(reference_path)
+            img = nib.Nifti1Image(data, ref_img.affine, ref_img.header)
+            nib.save(img, out_path)
+        elif ext in ['.mha', '.mhd']:
+            if not SITK_AVAILABLE:
+                raise RuntimeError("SimpleITK is required to save MHA/MHD files")
+            ref_img = sitk.ReadImage(reference_path)
+            itk_img = sitk.GetImageFromArray(data)
+            itk_img.SetSpacing(ref_img.GetSpacing())
+            sitk.WriteImage(itk_img, out_path)
+        else:
+            raise ValueError(f"Unsupported format: {ext}")
+
+    def make_overlay_volume(self) -> np.ndarray:
+        """Generate blended overlay volume from image and label data."""
+        if self.image_data is None or self.label_data is None:
+            return np.array([])
+
+        img = self.image_data
+        img_norm = (img - img.min()) / (img.ptp() if img.ptp() else 1) * 255
+        img_norm = img_norm.astype(np.uint8)
+        lbl = self.label_data.astype(np.int32)
+
+        overlay_vol = np.zeros_like(img_norm, dtype=np.uint8)
+        for k in range(img_norm.shape[2]):
+            slice_img = img_norm[:, :, k]
+            slice_lbl = lbl[:, :, k]
+            color_ovr = self.create_label_overlay(slice_lbl)
+            if color_ovr is not None:
+                ovr_gray = (0.299 * color_ovr[:, :, 0] +
+                            0.587 * color_ovr[:, :, 1] +
+                            0.114 * color_ovr[:, :, 2]).astype(np.uint8)
+                alpha = self._overlay_alpha
+                blended = ((1 - alpha) * slice_img + alpha * ovr_gray).astype(np.uint8)
+            else:
+                blended = slice_img
+            overlay_vol[:, :, k] = blended
+
+        return overlay_vol
 
     def render_slice(self, view_name: str, slice_idx: int,
                     show_overlay: bool = True, alpha: float = 0.5) -> QImage:
@@ -1160,9 +1204,17 @@ class MainWindow(QMainWindow):
         load_labels_action = QAction("Load Labels...", self)
         load_labels_action.setShortcut("Ctrl+L")
         file_menu.addAction(load_labels_action)
-        
+
+        save_submenu = file_menu.addMenu("Save")
+        save_image_action = QAction("Image Only...", self)
+        save_label_action = QAction("Label Only...", self)
+        save_overlay_action = QAction("Overlay Image...", self)
+        save_submenu.addAction(save_image_action)
+        save_submenu.addAction(save_label_action)
+        save_submenu.addAction(save_overlay_action)
+
         file_menu.addSeparator()
-        
+
         save_screenshot_action = QAction("Save Screenshot...", self)
         save_screenshot_action.setShortcut("Ctrl+S")
         file_menu.addAction(save_screenshot_action)
@@ -1205,6 +1257,9 @@ class MainWindow(QMainWindow):
         self.actions = {
             'load_image': load_image_action,
             'load_labels': load_labels_action,
+            'save_image': save_image_action,
+            'save_label': save_label_action,
+            'save_overlay': save_overlay_action,
             'save_screenshot': save_screenshot_action,
             'reset': reset_action,
             'exit': exit_action,
@@ -1279,6 +1334,9 @@ class ViewerController(QObject):
         self.view.actions['reset'].triggered.connect(self.reset_all)
         self.view.actions['exit'].triggered.connect(self.view.close)
         self.view.actions['fit_all'].triggered.connect(self.fit_all_views)
+        self.view.actions['save_image'].triggered.connect(self._save_image)
+        self.view.actions['save_label'].triggered.connect(self._save_label)
+        self.view.actions['save_overlay'].triggered.connect(self._save_overlay)
         self.view.actions['save_screenshot'].triggered.connect(self.save_screenshot)
         self.view.actions['toggle_control_panel'].triggered.connect(self.toggle_control_panel)
         self.view.actions['about'].triggered.connect(self.show_about)
@@ -1447,7 +1505,50 @@ class ViewerController(QObject):
         """Fit all views to show full image."""
         for slice_view in self.view.slice_views.values():
             slice_view.reset_view()
-    
+
+    def _save_image(self) -> None:
+        if self.model.image_data is None:
+            QMessageBox.warning(self.view, "Warning", "No image loaded.")
+            return
+        filters = "NIfTI (*.nii *.nii.gz);;MetaImage (*.mha *.mhd);;All Files (*)"
+        default = self.model.image_path or ""
+        path, _ = QFileDialog.getSaveFileName(self.view, "Save Image Only", default, filters)
+        if path:
+            try:
+                self.model.save_volume(self.model.image_data, self.model.image_path, path)
+                self.view.status_label.setText(f"Image saved: {Path(path).name}")
+            except Exception as e:
+                QMessageBox.critical(self.view, "Error", str(e))
+
+    def _save_label(self) -> None:
+        if self.model.label_data is None:
+            QMessageBox.warning(self.view, "Warning", "No label loaded.")
+            return
+        filters = "NIfTI (*.nii *.nii.gz);;MetaImage (*.mha *.mhd);;All Files (*)"
+        default = self.model.label_path or ""
+        path, _ = QFileDialog.getSaveFileName(self.view, "Save Label Only", default, filters)
+        if path:
+            try:
+                self.model.save_volume(self.model.label_data, self.model.label_path, path)
+                self.view.status_label.setText(f"Label saved: {Path(path).name}")
+            except Exception as e:
+                QMessageBox.critical(self.view, "Error", str(e))
+
+    def _save_overlay(self) -> None:
+        if self.model.image_data is None or self.model.label_data is None:
+            QMessageBox.warning(self.view, "Warning", "Need both image and label loaded.")
+            return
+        filters = "NIfTI (*.nii *.nii.gz);;MetaImage (*.mha *.mhd);;All Files (*)"
+        default = self.model.image_path or ""
+        path, _ = QFileDialog.getSaveFileName(self.view, "Save Overlay Image", default, filters)
+        if path:
+            try:
+                overlay_vol = self.model.make_overlay_volume()
+                self.model.save_volume(overlay_vol, self.model.image_path, path)
+                self.view.status_label.setText(f"Overlay saved: {Path(path).name}")
+            except Exception as e:
+                QMessageBox.critical(self.view, "Error", str(e))
+
     def save_screenshot(self) -> None:
         """Save current view as screenshot."""
         default_name = self.default_output_path or "screenshot.png"

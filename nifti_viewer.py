@@ -4,6 +4,12 @@ NIfTI/MHA Viewer with PySide 6
 A medical image viewer for NIfTI and MHA format files.
 """
 
+__version__ = "0.1.3"
+__author__ = "Steven Chen"
+__license__ = "MIT"
+__copyright__ = "Copyright 2025, Steven Chen"
+__all__ = ['MainWindow', 'ViewerController', 'ImageModel', 'main']
+
 import sys
 import os
 import logging
@@ -39,7 +45,8 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import (
     QPixmap, QPainter, QImage, QPen, QBrush, QColor, QTransform,
-    QAction, QIcon, QFont, QWheelEvent, QMouseEvent, QPixmapCache
+    QAction, QIcon, QFont, QWheelEvent, QMouseEvent, QPixmapCache,
+    QShortcut, QCursor
 )
 
 
@@ -266,8 +273,78 @@ class ImageModel(QObject):
                 label_mask = labels == label_val
                 color = self.get_label_color(label_val)
                 overlay[label_mask] = color
-        
+
         return overlay
+    @staticmethod
+    def strip_extensions(path: str) -> str:
+        """Remove all suffixes from a file path."""
+        p = Path(path)
+        for _ in p.suffixes:
+            p = p.with_suffix('')
+        return str(p)
+
+    def _normalize_output_path(self, out_path: str) -> Tuple[str, str]:
+        """Ensure path has a single valid extension and return (path, ext)."""
+        p = Path(out_path)
+        suffixes = p.suffixes
+        if suffixes[-2:] == ['.nii', '.gz']:
+            ext = '.nii.gz'
+        elif suffixes:
+            ext = suffixes[-1].lower()
+        else:
+            raise ValueError("Output path must have an extension")
+
+        base = Path(self.strip_extensions(out_path))
+        return str(base.with_suffix(ext)), ext
+
+    def save_volume(self, data: np.ndarray, reference_path: str, out_path: str) -> str:
+        """Save a 3D volume to disk using reference metadata."""
+        out_path, ext = self._normalize_output_path(out_path)
+        if ext in ['.nii', '.nii.gz']:
+            ref_img = nib.load(reference_path)
+            img = nib.Nifti1Image(data, ref_img.affine, ref_img.header)
+            nib.save(img, out_path)
+        elif ext in ['.mha', '.mhd']:
+            if not SITK_AVAILABLE:
+                raise RuntimeError("SimpleITK is required to save MHA/MHD files")
+            ref_img = sitk.ReadImage(reference_path)
+            # Transpose from nibabel's (X, Y, Z) to ITK's (Z, Y, X) convention
+            arr = np.transpose(data, (2, 1, 0))
+            itk_img = sitk.GetImageFromArray(arr)
+            itk_img.SetSpacing(ref_img.GetSpacing())
+            itk_img.SetDirection(ref_img.GetDirection())
+            itk_img.SetOrigin(ref_img.GetOrigin())
+            sitk.WriteImage(itk_img, out_path)
+        else:
+            raise ValueError(f"Unsupported format: {ext}")
+        return out_path
+
+    def make_overlay_volume(self) -> np.ndarray:
+        """Generate blended overlay volume from image and label data."""
+        if self.image_data is None or self.label_data is None:
+            return np.array([])
+
+        img = self.image_data
+        img_norm = (img - img.min()) / (img.ptp() if img.ptp() else 1) * 255
+        img_norm = img_norm.astype(np.uint8)
+        lbl = self.label_data.astype(np.int32)
+
+        overlay_vol = np.zeros_like(img_norm, dtype=np.uint8)
+        for k in range(img_norm.shape[2]):
+            slice_img = img_norm[:, :, k]
+            slice_lbl = lbl[:, :, k]
+            color_ovr = self.create_label_overlay(slice_lbl)
+            if color_ovr is not None:
+                ovr_gray = (0.299 * color_ovr[:, :, 0] +
+                            0.587 * color_ovr[:, :, 1] +
+                            0.114 * color_ovr[:, :, 2]).astype(np.uint8)
+                alpha = self._overlay_alpha
+                blended = ((1 - alpha) * slice_img + alpha * ovr_gray).astype(np.uint8)
+            else:
+                blended = slice_img
+            overlay_vol[:, :, k] = blended
+
+        return overlay_vol
 
     def render_slice(self, view_name: str, slice_idx: int,
                     show_overlay: bool = True, alpha: float = 0.5) -> QImage:
@@ -660,7 +737,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("Version 0.1.2")
+        version_label = QLabel("Version 0.1.3")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -680,7 +757,7 @@ class AboutDialog(QDialog):
             <li><b>Navigate:</b> Mouse wheel scrolls through slices, Ctrl+wheel zooms in/out</li>
             <li><b>Pan & Rotate:</b> Right-click drag to move view, click rotation buttons to flip</li>
             <li><b>Overlays:</b> Check "Show Overlay" and adjust transparency slider</li>
-            <li><b>Save:</b> File → Save Screenshot or Ctrl+S</li>
+            <li><b>Save:</b> File → Save Screenshot (Ctrl+S) or Volume (Ctrl+Shift+S)</li>
         </ul>
         
         <h3 style=\"color: #4a90e2;\">Keyboard Shortcuts</h3>
@@ -688,6 +765,7 @@ class AboutDialog(QDialog):
             <tr><td style=\"padding: 4px;\"><b>Ctrl+O</b></td><td style=\"padding: 4px;\">Open image file</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+L</b></td><td style=\"padding: 4px;\">Open label file</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+S</b></td><td style=\"padding: 4px;\">Save screenshot</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+Shift+S</b></td><td style=\"padding: 4px;\">Open volume save menu</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+R</b></td><td style=\"padding: 4px;\">Reset views and clear cache</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+T</b></td><td style=\"padding: 4px;\">Toggle control panel</td></tr>
             <tr><td style=\"padding: 4px;\"><b>F</b></td><td style=\"padding: 4px;\">Fit all views to window</td></tr>
@@ -725,7 +803,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("版本 0.1.2")
+        version_label = QLabel("版本 0.1.3")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -745,7 +823,7 @@ class AboutDialog(QDialog):
             <li><b>导航操作：</b>鼠标滚轮切换切片，Ctrl+滚轮缩放视图</li>
             <li><b>平移旋转：</b>右键拖拽移动视图，点击旋转按钮翻转方向</li>
             <li><b>叠加显示：</b>勾选"显示叠加"并调节透明度滑条</li>
-            <li><b>保存截图：</b>文件 → 保存截图或按 Ctrl+S</li>
+            <li><b>保存：</b>文件 → 保存截图 (Ctrl+S) 或保存体数据 (Ctrl+Shift+S)</li>
         </ul>
         
         <h3 style=\"color: #4a90e2;\">快捷键一览</h3>
@@ -753,6 +831,7 @@ class AboutDialog(QDialog):
             <tr><td style=\"padding: 4px;\"><b>Ctrl+O</b></td><td style=\"padding: 4px;\">打开影像文件</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+L</b></td><td style=\"padding: 4px;\">打开标签文件</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+S</b></td><td style=\"padding: 4px;\">保存截图</td></tr>
+            <tr><td style=\"padding: 4px;\"><b>Ctrl+Shift+S</b></td><td style=\"padding: 4px;\">打开体数据保存菜单</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+R</b></td><td style=\"padding: 4px;\">重置视图并清空缓存</td></tr>
             <tr><td style=\"padding: 4px;\"><b>Ctrl+T</b></td><td style=\"padding: 4px;\">切换控制面板显示</td></tr>
             <tr><td style=\"padding: 4px;\"><b>F</b></td><td style=\"padding: 4px;\">适应所有视图到窗口</td></tr>
@@ -1160,9 +1239,21 @@ class MainWindow(QMainWindow):
         load_labels_action = QAction("Load Labels...", self)
         load_labels_action.setShortcut("Ctrl+L")
         file_menu.addAction(load_labels_action)
-        
+
+        save_submenu = file_menu.addMenu("Save")
+        save_image_action = QAction("Image Only...", self)
+        save_label_action = QAction("Label Only...", self)
+        save_overlay_action = QAction("Overlay Image...", self)
+        save_submenu.addAction(save_image_action)
+        save_submenu.addAction(save_label_action)
+        save_submenu.addAction(save_overlay_action)
+
+        # Shortcut to quickly open the Save submenu
+        self.save_shortcut = QShortcut("Ctrl+Shift+S", self)
+        self.save_shortcut.activated.connect(lambda: save_submenu.exec(QCursor.pos()))
+
         file_menu.addSeparator()
-        
+
         save_screenshot_action = QAction("Save Screenshot...", self)
         save_screenshot_action.setShortcut("Ctrl+S")
         file_menu.addAction(save_screenshot_action)
@@ -1205,6 +1296,9 @@ class MainWindow(QMainWindow):
         self.actions = {
             'load_image': load_image_action,
             'load_labels': load_labels_action,
+            'save_image': save_image_action,
+            'save_label': save_label_action,
+            'save_overlay': save_overlay_action,
             'save_screenshot': save_screenshot_action,
             'reset': reset_action,
             'exit': exit_action,
@@ -1279,6 +1373,9 @@ class ViewerController(QObject):
         self.view.actions['reset'].triggered.connect(self.reset_all)
         self.view.actions['exit'].triggered.connect(self.view.close)
         self.view.actions['fit_all'].triggered.connect(self.fit_all_views)
+        self.view.actions['save_image'].triggered.connect(self._save_image)
+        self.view.actions['save_label'].triggered.connect(self._save_label)
+        self.view.actions['save_overlay'].triggered.connect(self._save_overlay)
         self.view.actions['save_screenshot'].triggered.connect(self.save_screenshot)
         self.view.actions['toggle_control_panel'].triggered.connect(self.toggle_control_panel)
         self.view.actions['about'].triggered.connect(self.show_about)
@@ -1447,7 +1544,50 @@ class ViewerController(QObject):
         """Fit all views to show full image."""
         for slice_view in self.view.slice_views.values():
             slice_view.reset_view()
-    
+
+    def _save_image(self) -> None:
+        if self.model.image_data is None:
+            QMessageBox.warning(self.view, "Warning", "No image loaded.")
+            return
+        filters = "NIfTI (*.nii *.nii.gz);;MetaImage (*.mha *.mhd);;All Files (*)"
+        default = self.model.strip_extensions(self.model.image_path) if self.model.image_path else ""
+        path, _ = QFileDialog.getSaveFileName(self.view, "Save Image Only", default, filters)
+        if path:
+            try:
+                path = self.model.save_volume(self.model.image_data, self.model.image_path, path)
+                self.view.status_label.setText(f"Image saved: {Path(path).name}")
+            except Exception as e:
+                QMessageBox.critical(self.view, "Error", str(e))
+
+    def _save_label(self) -> None:
+        if self.model.label_data is None:
+            QMessageBox.warning(self.view, "Warning", "No label loaded.")
+            return
+        filters = "NIfTI (*.nii *.nii.gz);;MetaImage (*.mha *.mhd);;All Files (*)"
+        default = self.model.strip_extensions(self.model.label_path) if self.model.label_path else ""
+        path, _ = QFileDialog.getSaveFileName(self.view, "Save Label Only", default, filters)
+        if path:
+            try:
+                path = self.model.save_volume(self.model.label_data, self.model.label_path, path)
+                self.view.status_label.setText(f"Label saved: {Path(path).name}")
+            except Exception as e:
+                QMessageBox.critical(self.view, "Error", str(e))
+
+    def _save_overlay(self) -> None:
+        if self.model.image_data is None or self.model.label_data is None:
+            QMessageBox.warning(self.view, "Warning", "Need both image and label loaded.")
+            return
+        filters = "NIfTI (*.nii *.nii.gz);;MetaImage (*.mha *.mhd);;All Files (*)"
+        default = self.model.strip_extensions(self.model.image_path) if self.model.image_path else ""
+        path, _ = QFileDialog.getSaveFileName(self.view, "Save Overlay Image", default, filters)
+        if path:
+            try:
+                overlay_vol = self.model.make_overlay_volume()
+                path = self.model.save_volume(overlay_vol, self.model.image_path, path)
+                self.view.status_label.setText(f"Overlay saved: {Path(path).name}")
+            except Exception as e:
+                QMessageBox.critical(self.view, "Error", str(e))
+
     def save_screenshot(self) -> None:
         """Save current view as screenshot."""
         default_name = self.default_output_path or "screenshot.png"
@@ -1887,7 +2027,7 @@ Keyboard Shortcuts:
                         help="QPixmapCache size in KB (default: 100MB)")
     parser.add_argument("--preload-count", type=int, default=2, 
                         help="Number of adjacent slices to preload (default: 2)")
-    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.1.2")
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.1.3")
     parser.add_argument("--log-level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
                         default='INFO', help="Set logging level")
     
@@ -1900,7 +2040,7 @@ Keyboard Shortcuts:
     # Create application
     app = QApplication(sys.argv)
     app.setApplicationName("Medical Image Viewer")
-    app.setApplicationVersion("0.1.2")
+    app.setApplicationVersion("0.1.3")
     
     # Set application style
     app.setStyleSheet("""

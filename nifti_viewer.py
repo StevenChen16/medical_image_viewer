@@ -11,18 +11,15 @@ __copyright__ = "Copyright 2025, Steven Chen"
 __all__ = ['MainWindow', 'ViewerController', 'ImageModel', 'main']
 
 import sys
-import os
 import logging
 import argparse
 from pathlib import Path
 from functools import lru_cache, partial
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, List
 import traceback
 
 import numpy as np
 import nibabel as nib
-import matplotlib.pyplot as plt
-from PIL import Image
 
 # Conditionally import SimpleITK for MHA support
 try:
@@ -34,18 +31,18 @@ except ImportError:
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QSplitter, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
-    QSlider, QLabel, QCheckBox, QPushButton, QMenuBar, QStatusBar,
-    QDockWidget, QGroupBox, QGridLayout, QSpinBox, QDoubleSpinBox,
+    QSlider, QLabel, QCheckBox, QPushButton,
+    QDockWidget, QGroupBox, QGridLayout, QSpinBox,
     QFileDialog, QMessageBox, QProgressBar, QToolTip, QFrame, QLineEdit,
     QDialog, QTabWidget, QTextEdit, QScrollArea, QSizePolicy, QColorDialog
 )
 from PySide6.QtCore import (
-    Qt, QObject, Signal, QThread, QRunnable, QThreadPool, QTimer,
-    QRect, QSize, QPointF
+    Qt, QObject, Signal, QRunnable, QThreadPool, QTimer,
+    QPointF
 )
 from PySide6.QtGui import (
-    QPixmap, QPainter, QImage, QPen, QBrush, QColor, QTransform,
-    QAction, QIcon, QFont, QWheelEvent, QMouseEvent, QPixmapCache,
+    QPixmap, QPainter, QImage, QColor, QTransform,
+    QAction, QIcon, QWheelEvent, QMouseEvent, QPixmapCache,
     QShortcut, QCursor
 )
 
@@ -56,15 +53,16 @@ from PySide6.QtGui import (
 
 class ColorButton(QPushButton):
     """Custom color picker button widget."""
-    
+
     colorChanged = Signal(object)  # Emits QColor when color changes
-    
+
     def __init__(self, *args, color=None, **kwargs):
         super().__init__(*args, **kwargs)
         if color is None:
-            self._color = QColor(227, 26, 28)  # Default to first enhanced color (red)
+            self._color = QColor(227, 26, 28)
+            # Default to first enhanced color (red)
         elif isinstance(color, (list, tuple)) and len(color) == 3:
-            self._color = QColor(*color)  # Unpack RGB tuple
+            self._color = QColor(*color)
         elif isinstance(color, QColor):
             self._color = color
         else:
@@ -72,33 +70,38 @@ class ColorButton(QPushButton):
         self.pressed.connect(self.open_color_picker)
         self.setFixedSize(30, 24)
         self.update_button_color()
-    
+
     def setColor(self, color):
         """Set button color and emit signal if changed."""
         if isinstance(color, (list, tuple)) and len(color) == 3:
             color = QColor(*color)
         elif not isinstance(color, QColor):
             color = QColor(color)
-            
+
         if color != self._color:
             self._color = color
             self.update_button_color()
             self.colorChanged.emit(self._color)
-    
+
     def color(self):
         """Get current color as QColor."""
         return self._color
-    
+
     def color_rgb(self):
         """Get current color as RGB tuple."""
         return (self._color.red(), self._color.green(), self._color.blue())
-    
+
     def update_button_color(self):
         """Update button visual appearance to show current color."""
         if self._color.isValid():
-            self.setStyleSheet(f"""
+            self.setStyleSheet(
+                f"""
                 QPushButton {{
-                    background-color: rgb({self._color.red()}, {self._color.green()}, {self._color.blue()});
+                    background-color: rgb(
+                        {self._color.red()},
+                        {self._color.green()},
+                        {self._color.blue()}
+                    );
                     border: 2px solid #666;
                     border-radius: 4px;
                 }}
@@ -108,15 +111,16 @@ class ColorButton(QPushButton):
                 QPushButton:pressed {{
                     border: 2px solid #ccc;
                 }}
-            """)
+                """
+            )
         else:
             self.setStyleSheet("")
-    
+
     def open_color_picker(self):
         """Open color picker dialog."""
         dialog = QColorDialog(self._color, self)
         dialog.setWindowTitle("Select Label Color")
-        
+
         if dialog.exec() == QColorDialog.Accepted:
             new_color = dialog.currentColor()
             if new_color.isValid():
@@ -181,8 +185,8 @@ class ImageModel(QObject):
         ]
         
         # Dynamic color mapping: label_value -> (r, g, b) tuple
-        self._custom_label_colors = {}  # User customizations
-        self._current_label_values = []  # Currently loaded label values
+        self._custom_label_colors: Dict[int, Tuple[int, int, int]] = {}
+        self._current_label_values: List[int] = []
         
         # Fixed overlay transparency for clinical consistency
         self._overlay_alpha = 0.4
@@ -871,10 +875,10 @@ class SliceView(QGraphicsView):
         self.model: Optional[ImageModel] = None
         
         # Graphics setup
-        self.scene = QGraphicsScene()
-        self.setScene(self.scene)
+        self._scene = QGraphicsScene()
+        self.setScene(self._scene)
         self.pixmap_item = QGraphicsPixmapItem()
-        self.scene.addItem(self.pixmap_item)
+        self._scene.addItem(self.pixmap_item)
         
         # View settings
         self.setRenderHint(QPainter.Antialiasing)
@@ -1171,7 +1175,7 @@ class MainWindow(QMainWindow):
         dock_layout.addWidget(self.label_colors_group)
         
         # Store color buttons for each label
-        self.label_color_buttons = {}
+        self.label_color_buttons: Dict[int, QPushButton] = {}
 
         # Progress bar
         self.progress_bar = QProgressBar()
@@ -1293,7 +1297,7 @@ class MainWindow(QMainWindow):
         help_menu.addAction(about_action)
         
         # Store actions for controller access
-        self.actions = {
+        self.action_map: Dict[str, QAction] = {
             'load_image': load_image_action,
             'load_labels': load_labels_action,
             'save_image': save_image_action,
@@ -1368,17 +1372,17 @@ class ViewerController(QObject):
     def setup_view_connections(self) -> None:
         """Connect main view signals."""
         # Menu actions
-        self.view.actions['load_image'].triggered.connect(self.load_image)
-        self.view.actions['load_labels'].triggered.connect(self.load_labels)
-        self.view.actions['reset'].triggered.connect(self.reset_all)
-        self.view.actions['exit'].triggered.connect(self.view.close)
-        self.view.actions['fit_all'].triggered.connect(self.fit_all_views)
-        self.view.actions['save_image'].triggered.connect(self._save_image)
-        self.view.actions['save_label'].triggered.connect(self._save_label)
-        self.view.actions['save_overlay'].triggered.connect(self._save_overlay)
-        self.view.actions['save_screenshot'].triggered.connect(self.save_screenshot)
-        self.view.actions['toggle_control_panel'].triggered.connect(self.toggle_control_panel)
-        self.view.actions['about'].triggered.connect(self.show_about)
+        self.view.action_map['load_image'].triggered.connect(self.load_image)
+        self.view.action_map['load_labels'].triggered.connect(self.load_labels)
+        self.view.action_map['reset'].triggered.connect(self.reset_all)
+        self.view.action_map['exit'].triggered.connect(self.view.close)
+        self.view.action_map['fit_all'].triggered.connect(self.fit_all_views)
+        self.view.action_map['save_image'].triggered.connect(self._save_image)
+        self.view.action_map['save_label'].triggered.connect(self._save_label)
+        self.view.action_map['save_overlay'].triggered.connect(self._save_overlay)
+        self.view.action_map['save_screenshot'].triggered.connect(self.save_screenshot)
+        self.view.action_map['toggle_control_panel'].triggered.connect(self.toggle_control_panel)
+        self.view.action_map['about'].triggered.connect(self.show_about)
         
         # Control buttons
         self.view.load_image_btn.clicked.connect(self.load_image)
@@ -1530,9 +1534,9 @@ class ViewerController(QObject):
             self._clear_label_color_controls()
         
         for slice_view in self.view.slice_views.values():
-            slice_view.scene.clear()
+            slice_view._scene.clear()
             slice_view.pixmap_item = QGraphicsPixmapItem()
-            slice_view.scene.addItem(slice_view.pixmap_item)
+            slice_view._scene.addItem(slice_view.pixmap_item)
         
         self.view.status_label.setText("Ready - Load an image to begin")
         
@@ -1632,7 +1636,7 @@ class ViewerController(QObject):
             # Update button appearance
             self.view.panel_toggle_btn.setText("▶")
             self.view.panel_toggle_btn.setToolTip("Show Control Panel (Ctrl+T)")
-            self.view.actions['toggle_control_panel'].setChecked(False)
+            self.view.action_map['toggle_control_panel'].setChecked(False)
             
         else:
             # Recreate the control dock
@@ -1653,7 +1657,7 @@ class ViewerController(QObject):
             # Update button appearance
             self.view.panel_toggle_btn.setText("◀")
             self.view.panel_toggle_btn.setToolTip("Hide Control Panel (Ctrl+T)")
-            self.view.actions['toggle_control_panel'].setChecked(True)
+            self.view.action_map['toggle_control_panel'].setChecked(True)
     
     def _reconnect_control_signals(self) -> None:
         """Reconnect control panel signals after recreating the dock."""

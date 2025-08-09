@@ -48,7 +48,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QPixmap, QPainter, QImage, QPen, QBrush, QColor, QTransform,
     QAction, QIcon, QFont, QWheelEvent, QMouseEvent, QPixmapCache,
-    QShortcut, QCursor, QPainterPath
+    QShortcut, QCursor, QPainterPath, QFontMetricsF
 )
 
 
@@ -652,6 +652,11 @@ class Measurement:
         self.text_color = QColor(255, 0, 0)  # Default red
         self.text_font_size = 5.0  # Smaller default font size
         self.text_font_weight = QFont.Normal
+        
+        # Persistent layout fields (image coordinates)
+        self.text_offset_img = None   # QPointF(dx, dy) relative to anchor
+        self.text_anchor = 'center'   # 'p1' | 'p2' | 'center' 
+        self.text_locked = False      # UI can toggle "lock label position"
     
     def apply_style(self, line_color=None, line_width=None, text_color=None, text_font_size=None, text_font_weight=None):
         """Apply style properties to this measurement."""
@@ -2206,6 +2211,9 @@ class ViewerController(QObject):
         """Add a graphical representation of the measurement to the scene."""
         self._create_measurement_graphics(measurement, measurement.view_name)
         
+        # Trigger dynamic recalculation after adding the new measurement
+        self._recalculate_text_positions(measurement.view_name)
+        
         # Add to measurement list widget with enhanced display format
         display_text = (f"Line {measurement.id}: {measurement.length_mm:.2f} mm\n"
                        f"  {measurement.view_name.title()} view, slice {measurement.slice_idx}")
@@ -2269,9 +2277,9 @@ class ViewerController(QObject):
         font.setWeight(measurement.text_font_weight)
         text.setFont(font)
         
-        # Use intelligent text positioning with collision avoidance
+        # Use intelligent text positioning with collision avoidance and persistence
         line_center = QPointF((p1_draw.x() + p2_draw.x()) / 2, (p1_draw.y() + p2_draw.y()) / 2)
-        text_pos = self._calculate_text_position(view, p1_draw, p2_draw, text)
+        text_pos = self._calculate_text_position(view, p1_draw, p2_draw, text, measurement)
         text.setPos(text_pos)
         text.setData(0, measurement.id)
         text.setFlag(QGraphicsSimpleTextItem.ItemIsSelectable, True)
@@ -2287,72 +2295,154 @@ class ViewerController(QObject):
         
         # Track graphics items (including optional arrow)
         self.measurement_manager.add_graphics_items(measurement.id, view_name, line, text, arrow_item)
-        
-        # Trigger dynamic recalculation of all measurements in this view to avoid overlaps
-        self._recalculate_text_positions(view_name)
     
-    def _calculate_text_position(self, view, p1: QPointF, p2: QPointF, text_item: QGraphicsSimpleTextItem) -> QPointF:
-        """Calculate optimal text position using 6 default positions strategy."""
+    def _calculate_text_position(self, view, p1: QPointF, p2: QPointF, text_item: QGraphicsSimpleTextItem, 
+                               measurement=None, occupied_rects=None) -> QPointF:
+        """Calculate optimal text position with stability and reservation system."""
         line_center = QPointF((p1.x() + p2.x()) / 2, (p1.y() + p2.y()) / 2)
         
-        # Add text item to scene temporarily to get proper bounding rect
-        temp_added = False
-        if text_item.scene() is None:
-            view.scene.addItem(text_item)
-            temp_added = True
+        # Get text dimensions using font metrics (avoid scene manipulation)
+        font = text_item.font()
+        metrics = QFontMetricsF(font)
+        text_width = metrics.horizontalAdvance(text_item.text())
+        text_height = metrics.height()
         
-        # Calculate line vector and perpendicular vector
+        # Calculate line vectors
         line_vector = QPointF(p2.x() - p1.x(), p2.y() - p1.y())
         line_length = (line_vector.x() ** 2 + line_vector.y() ** 2) ** 0.5
         
         if line_length > 0:
             line_unit = QPointF(line_vector.x() / line_length, line_vector.y() / line_length)
-            # Perpendicular vector (rotate 90 degrees)
             perp_unit = QPointF(-line_unit.y(), line_unit.x())
         else:
             line_unit = QPointF(1, 0)
             perp_unit = QPointF(0, 1)
         
-        # Get text dimensions
-        text_item.setPos(QPointF(0, 0))  # Reset position
-        text_bounds = text_item.boundingRect()
-        text_height = text_bounds.height()
+        # Try to preserve existing position first
+        if measurement and measurement.text_offset_img and measurement.text_anchor:
+            old_pos = self._get_position_from_anchor(measurement.text_anchor, measurement.text_offset_img, 
+                                                   p1, p2, line_center)
+            if old_pos and not self._has_collision_with_reservation(view, old_pos, text_width, text_height, 
+                                                                   text_item, p1, p2, occupied_rects):
+                return old_pos
         
-        # Define 6 default positions: p1-left, p1-right, center-left, center-right, p2-left, p2-right  
-        # Use very close distance to line
-        offset = max(6, text_height // 2 + 3)  # Much closer to line
-        
-        candidates = [
-            # Priority 1: Center positions (most preferred)
-            QPointF(line_center.x() + perp_unit.x() * offset, line_center.y() + perp_unit.y() * offset),  # Center-right
-            QPointF(line_center.x() - perp_unit.x() * offset, line_center.y() - perp_unit.y() * offset),  # Center-left
-            
-            # Priority 2: Endpoint positions  
-            QPointF(p1.x() + perp_unit.x() * offset, p1.y() + perp_unit.y() * offset),  # P1-right
-            QPointF(p1.x() - perp_unit.x() * offset, p1.y() - perp_unit.y() * offset),  # P1-left
-            QPointF(p2.x() + perp_unit.x() * offset, p2.y() + perp_unit.y() * offset),  # P2-right
-            QPointF(p2.x() - perp_unit.x() * offset, p2.y() - perp_unit.y() * offset),  # P2-left
-            
-            # Priority 3: Fallback to original center (no offset)
-            line_center,
+        # Define anchor points and their priorities
+        anchor_points = [
+            ('p1', p1, 1.0),      # Endpoint 1, highest priority
+            ('p2', p2, 1.0),      # Endpoint 2, highest priority  
+            ('center', line_center, 0.8),  # Center, lower priority
         ]
         
-        # Check each candidate for collisions
-        best_candidate = line_center  # Default fallback
-        for candidate in candidates:
-            # Temporarily position the text item to get its scene bounding rect
-            text_item.setPos(candidate)
-            scene_rect = text_item.sceneBoundingRect()
-            
-            if not self._has_collision(view, scene_rect, text_item, p1, p2):
-                best_candidate = candidate
+        # Define offset directions with distances (去同质化)
+        offset_close = max(6, text_height * 0.6)    # Very close
+        offset_medium = max(10, text_height * 0.8)  # Medium distance
+        offset_far = max(15, text_height * 1.2)     # Far distance
+        
+        # Generate diverse candidates (法向 + 斜向)
+        directions = [
+            (perp_unit.x(), perp_unit.y(), 'right'),           # Right
+            (-perp_unit.x(), -perp_unit.y(), 'left'),          # Left  
+            # 斜向去同质化
+            (0.7*perp_unit.x() + 0.3*line_unit.x(), 0.7*perp_unit.y() + 0.3*line_unit.y(), 'right_forward'),
+            (0.7*perp_unit.x() - 0.3*line_unit.x(), 0.7*perp_unit.y() - 0.3*line_unit.y(), 'right_back'),
+            (-0.7*perp_unit.x() + 0.3*line_unit.x(), -0.7*perp_unit.y() + 0.3*line_unit.y(), 'left_forward'),
+            (-0.7*perp_unit.x() - 0.3*line_unit.x(), -0.7*perp_unit.y() - 0.3*line_unit.y(), 'left_back'),
+        ]
+        
+        # Generate all candidates with priorities
+        candidates = []
+        for anchor_name, anchor_pos, anchor_priority in anchor_points:
+            for distance, dist_priority in [(offset_close, 3.0), (offset_medium, 2.0), (offset_far, 1.0)]:
+                for dx, dy, dir_name in directions:
+                    pos = QPointF(anchor_pos.x() + dx * distance, anchor_pos.y() + dy * distance)
+                    
+                    # Calculate priority: closer to line + endpoint preference
+                    priority = anchor_priority * dist_priority
+                    # Prefer positions similar to old position for stability
+                    if measurement and measurement.text_offset_img:
+                        old_offset = measurement.text_offset_img
+                        new_offset = QPointF(dx * distance, dy * distance)
+                        similarity = 1.0 / (1.0 + ((old_offset.x() - new_offset.x())**2 + (old_offset.y() - new_offset.y())**2)**0.5 / 20)
+                        priority *= (1.0 + similarity * 0.5)  # Bonus for similar positions
+                    
+                    candidates.append((pos, priority, anchor_name, QPointF(dx * distance, dy * distance)))
+        
+        # Sort by priority (higher is better)
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        
+        # Add fallback center position
+        candidates.append((line_center, 0.1, 'center', QPointF(0, 0)))
+        
+        # Find best candidate
+        best_pos = line_center
+        best_anchor = 'center' 
+        best_offset = QPointF(0, 0)
+        
+        for candidate_pos, _, anchor_name, offset in candidates:
+            if not self._has_collision_with_reservation(view, candidate_pos, text_width, text_height, 
+                                                       text_item, p1, p2, occupied_rects):
+                best_pos = candidate_pos
+                best_anchor = anchor_name
+                best_offset = offset
                 break
         
-        # Remove from scene if we temporarily added it
-        if temp_added:
-            view.scene.removeItem(text_item)
+        # Store persistent layout info
+        if measurement:
+            measurement.text_anchor = best_anchor
+            measurement.text_offset_img = best_offset
+        
+        return best_pos
+    
+    def _get_position_from_anchor(self, anchor: str, offset: QPointF, p1: QPointF, p2: QPointF, center: QPointF) -> QPointF:
+        """Restore position from anchor and offset."""
+        if anchor == 'p1':
+            return QPointF(p1.x() + offset.x(), p1.y() + offset.y())
+        elif anchor == 'p2':
+            return QPointF(p2.x() + offset.x(), p2.y() + offset.y())
+        else:  # 'center'
+            return QPointF(center.x() + offset.x(), center.y() + offset.y())
+    
+    def _has_collision_with_reservation(self, view, pos: QPointF, text_width: float, text_height: float,
+                                      current_text: QGraphicsSimpleTextItem, line_p1: QPointF, line_p2: QPointF, 
+                                      occupied_rects=None) -> bool:
+        """Enhanced collision detection with reservation system and boundary checking."""
+        # Create text rect at position
+        text_rect = QRectF(pos.x(), pos.y(), text_width, text_height)
+        
+        # Dynamic margin based on font size
+        font_height = text_height
+        collision_margin = max(6, font_height * 0.4)
+        expanded_rect = text_rect.adjusted(-collision_margin, -collision_margin, 
+                                         collision_margin, collision_margin)
+        
+        # Check image boundaries (avoid pushing text off-screen)
+        if hasattr(view, 'pixmap_item') and view.pixmap_item.pixmap() and not view.pixmap_item.pixmap().isNull():
+            pixmap = view.pixmap_item.pixmap()
+            image_rect = QRectF(0, 0, pixmap.width(), pixmap.height())
+            margin_to_edge = 2  # Minimum distance to image edge
+            safe_image_rect = image_rect.adjusted(margin_to_edge, margin_to_edge, 
+                                                -margin_to_edge, -margin_to_edge)
             
-        return best_candidate
+            # If text would be outside safe area, reject
+            if not safe_image_rect.contains(text_rect):
+                return True  # Collision = True means reject this position
+        
+        # Check reservation system first
+        if occupied_rects:
+            for occupied_rect in occupied_rects:
+                if expanded_rect.intersects(occupied_rect):
+                    return True
+        
+        # Check collision with existing measurement texts
+        for item in view.scene.items():
+            if (isinstance(item, QGraphicsSimpleTextItem) and 
+                item != current_text and
+                item.data(0) is not None and  # Only check measurement texts 
+                item.sceneBoundingRect().intersects(expanded_rect)):
+                return True
+        
+        # Check collision with line
+        return self._intersects_line(expanded_rect, line_p1, line_p2)
     
     def _has_collision(self, view, text_rect: QRectF, current_text: QGraphicsSimpleTextItem, line_p1: QPointF, line_p2: QPointF) -> bool:
         """Check if text collides with other texts or with its own line."""
@@ -2369,30 +2459,45 @@ class ViewerController(QObject):
     def _intersects_line(self, rect: QRectF, p1: QPointF, p2: QPointF) -> bool:
         """Check if a rectangle intersects with a line segment."""
         # Expand rect slightly to avoid too-close positioning
-        margin = 4  # Reduced margin to allow closer text positioning
+        margin = 3  # Slightly reduced margin 
         expanded_rect = rect.adjusted(-margin, -margin, margin, margin)
         
         # Check if either endpoint is inside the rectangle
         if expanded_rect.contains(p1) or expanded_rect.contains(p2):
             return True
             
-        # Check if the line intersects any edge of the rectangle
-        # This is a simplified check - we could implement full line-rectangle intersection
-        # For now, check if the line passes through the rect's bounding area
+        # More precise line-rectangle intersection check
+        # Check if line segment intersects any of the rectangle's edges
+        rect_left = expanded_rect.left()
+        rect_right = expanded_rect.right()
+        rect_top = expanded_rect.top()
+        rect_bottom = expanded_rect.bottom()
+        
+        # Simple bounding box check first
+        line_left = min(p1.x(), p2.x())
+        line_right = max(p1.x(), p2.x())
+        line_top = min(p1.y(), p2.y())
+        line_bottom = max(p1.y(), p2.y())
+        
+        # If line's bounding box doesn't intersect rect, no collision
+        if (line_right < rect_left or line_left > rect_right or 
+            line_bottom < rect_top or line_top > rect_bottom):
+            return False
+            
+        # If line passes through the center area, consider it a collision
         rect_center = expanded_rect.center()
         line_center = QPointF((p1.x() + p2.x()) / 2, (p1.y() + p2.y()) / 2)
         
-        # If line center is very close to rect center, consider it an intersection
-        distance = ((rect_center.x() - line_center.x()) ** 2 + 
-                   (rect_center.y() - line_center.y()) ** 2) ** 0.5
+        center_distance = ((rect_center.x() - line_center.x()) ** 2 + 
+                          (rect_center.y() - line_center.y()) ** 2) ** 0.5
         
-        # Consider intersection if distance is less than half the diagonal of expanded rect
+        # Use smaller diagonal threshold for more precise collision detection
         diagonal = ((expanded_rect.width()) ** 2 + (expanded_rect.height()) ** 2) ** 0.5
-        return distance < diagonal / 2
+        return center_distance < diagonal / 3  # More restrictive threshold
     
     def _has_text_collision(self, view, text_rect: QRectF, current_text: QGraphicsSimpleTextItem = None) -> bool:
         """Check if a text rectangle collides with existing measurement texts."""
-        collision_margin = 6  # Reduced minimum spacing between texts
+        collision_margin = 8  # Increased minimum spacing to prevent overlap
         expanded_rect = text_rect.adjusted(-collision_margin, -collision_margin, 
                                          collision_margin, collision_margin)
         
@@ -2466,7 +2571,7 @@ class ViewerController(QObject):
         return arrow_item
     
     def _recalculate_text_positions(self, view_name: str):
-        """Recalculate text positions for all measurements in a view to avoid overlaps."""
+        """Smart recalculation that preserves good positions and only moves conflicting ones."""
         if view_name not in self.view.slice_views:
             return
             
@@ -2474,22 +2579,59 @@ class ViewerController(QObject):
         current_slice = self.model.view_configs[view_name]['slice']
         
         # Get all measurements for this view and slice
-        measurements_to_update = []
+        measurements = []
         for measurement in self.measurement_manager.measurements.values():
             if (measurement.view_name == view_name and 
                 measurement.slice_idx == current_slice and
                 measurement.id in self.measurement_manager._graphics_items):
-                measurements_to_update.append(measurement)
+                measurements.append(measurement)
         
-        # Sort by creation order (older measurements get priority for better positions)
-        measurements_to_update.sort(key=lambda m: m.id)
+        if len(measurements) <= 1:
+            return  # No need to recalculate for single measurement
         
-        # Recalculate positions for each measurement
-        for i, measurement in enumerate(measurements_to_update):
-            # Skip the most recently added measurement (it's already positioned)
-            if i == len(measurements_to_update) - 1:
-                continue
+        # Sort by creation order (older measurements get priority)
+        measurements.sort(key=lambda m: m.id)
+        
+        # Step 1: Check which measurements have text collisions
+        conflicting_measurements = set()
+        for i, measurement1 in enumerate(measurements):
+            graphics1 = self.measurement_manager._graphics_items[measurement1.id][view_name]
+            if len(graphics1) >= 2:
+                text1 = graphics1[1]
+                rect1 = text1.sceneBoundingRect()
                 
+                for j, measurement2 in enumerate(measurements[i+1:], i+1):
+                    graphics2 = self.measurement_manager._graphics_items[measurement2.id][view_name]
+                    if len(graphics2) >= 2:
+                        text2 = graphics2[1] 
+                        rect2 = text2.sceneBoundingRect()
+                        
+                        # Check if texts overlap (with margin)
+                        margin = 8
+                        expanded_rect1 = rect1.adjusted(-margin, -margin, margin, margin)
+                        if expanded_rect1.intersects(rect2):
+                            conflicting_measurements.add(measurement1.id)
+                            conflicting_measurements.add(measurement2.id)
+        
+        # Step 2: Build occupied_rects from non-conflicting measurements (position reservation)
+        occupied_rects = []
+        for measurement in measurements:
+            if measurement.id not in conflicting_measurements:
+                # Reserve space for good positions
+                graphics = self.measurement_manager._graphics_items[measurement.id][view_name]
+                if len(graphics) >= 2:
+                    text_item = graphics[1]
+                    text_rect = text_item.sceneBoundingRect()
+                    margin = 8  # Same as collision detection margin
+                    reserved_rect = text_rect.adjusted(-margin, -margin, margin, margin)
+                    occupied_rects.append(reserved_rect)
+        
+        # Step 3: Recalculate positions for conflicting measurements with priority ordering
+        # Sort conflicting measurements: locked first, then by age (older first)
+        conflicting_list = [m for m in measurements if m.id in conflicting_measurements]
+        conflicting_list.sort(key=lambda m: (not m.text_locked, m.id))  # locked=True first, then by ID
+        
+        for measurement in conflicting_list:
             graphics_items = self.measurement_manager._graphics_items[measurement.id][view_name]
             if len(graphics_items) >= 2:
                 line_item = graphics_items[0]
@@ -2505,10 +2647,20 @@ class ViewerController(QObject):
                 if arrow_item and arrow_item.scene():
                     view.scene.removeItem(arrow_item)
                 
-                # Recalculate text position
+                # Recalculate text position with reservation system
                 line_center = QPointF((p1.x() + p2.x()) / 2, (p1.y() + p2.y()) / 2)
-                new_text_pos = self._calculate_text_position(view, p1, p2, text_item)
+                new_text_pos = self._calculate_text_position(view, p1, p2, text_item, measurement, occupied_rects)
                 text_item.setPos(new_text_pos)
+                
+                # Reserve this new position for subsequent calculations
+                font = text_item.font()
+                metrics = QFontMetricsF(font)
+                text_width = metrics.horizontalAdvance(text_item.text())
+                text_height = metrics.height()
+                text_rect = QRectF(new_text_pos.x(), new_text_pos.y(), text_width, text_height)
+                margin = max(6, text_height * 0.4)
+                reserved_rect = text_rect.adjusted(-margin, -margin, margin, margin)
+                occupied_rects.append(reserved_rect)
                 
                 # Create new arrow if needed (only for far displacements)
                 distance_from_center = ((new_text_pos.x() - line_center.x()) ** 2 + 

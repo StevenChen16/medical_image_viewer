@@ -4,7 +4,7 @@ NIfTI/MHA Viewer with PySide 6
 A medical image viewer for NIfTI and MHA format files.
 """
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 __author__ = "Steven Chen"
 __license__ = "MIT"
 __copyright__ = "Copyright 2025, Steven Chen"
@@ -38,7 +38,7 @@ from PySide6.QtWidgets import (
     QDockWidget, QGroupBox, QGridLayout, QSpinBox, QDoubleSpinBox,
     QFileDialog, QMessageBox, QProgressBar, QToolTip, QFrame, QLineEdit,
     QDialog, QTabWidget, QTextEdit, QScrollArea, QSizePolicy, QColorDialog, 
-    QListWidget, QGraphicsLineItem, QGraphicsSimpleTextItem, QMenu, QComboBox, QGraphicsEllipseItem,
+    QListWidget, QListWidgetItem, QGraphicsLineItem, QGraphicsSimpleTextItem, QMenu, QComboBox, QGraphicsEllipseItem,
     QGraphicsPathItem
 )
 from PySide6.QtCore import (
@@ -424,11 +424,7 @@ class ImageModel(QObject):
             height, width = img_flipped.shape
             qimage = QImage(img_flipped.copy().data, width, height, img_flipped.strides[0], QImage.Format_Grayscale8)
 
-        if rotation != 0 and not qimage.isNull():
-            transform = QTransform()
-            transform.rotate(rotation)
-            qimage = qimage.transformed(transform)
-
+        # Don't apply rotation to QImage - let pixmap handle rotation transform
         return qimage
     
     def load_image(self, filepath: str) -> None:
@@ -632,9 +628,9 @@ import csv
 class Measurement:
     """Data class for a single measurement."""
     def __init__(self, id: int, type: str, view_name: str, slice_idx: int,
-                 start_voxel: Tuple[int, int, int], end_voxel: Tuple[int, int, int],
+                 start_voxel: Tuple[float, float, float], end_voxel: Tuple[float, float, float],
                  start_world: Tuple[float, float, float], end_world: Tuple[float, float, float],
-                 length_mm: float, timestamp: float):
+                 length_mm: float, timestamp: float, rotation: int = 0):
         self.id = id
         self.type = type  # 'line', 'angle', 'roi'
         self.view_name = view_name
@@ -645,6 +641,7 @@ class Measurement:
         self.end_world = end_world
         self.length_mm = length_mm
         self.timestamp = timestamp
+        self.rotation = rotation  # View rotation angle when measurement was taken
         
         # Style properties
         self.line_color = QColor(255, 0, 0)  # Default red
@@ -707,6 +704,9 @@ class MeasurementManager(QObject):
 
         # Length calculation
         length_mm = np.linalg.norm(np.array(start_world) - np.array(end_world))
+        
+        # Get current rotation angle for this view
+        rotation = self.model.view_configs[view_name]['rotation']
 
         measurement = Measurement(
             id=self._next_id,
@@ -718,23 +718,24 @@ class MeasurementManager(QObject):
             start_world=tuple(start_world),
             end_world=tuple(end_world),
             length_mm=length_mm,
-            timestamp=time.time()
+            timestamp=time.time(),
+            rotation=rotation
         )
 
         self.measurements[self._next_id] = measurement
         self.measurementAdded.emit(measurement)
         self._next_id += 1
 
-    def _get_voxel_coords(self, view_name: str, slice_idx: int, pos: tuple) -> Tuple[int, int, int]:
-        """Convert 2D slice position to 3D voxel coordinates."""
+    def _get_voxel_coords(self, view_name: str, slice_idx: int, pos: tuple) -> Tuple[float, float, float]:
+        """Convert 2D slice position to 3D voxel coordinates with sub-pixel precision."""
         x, y = pos
         axis = self.model.view_configs[view_name]['axis']
         if axis == 0:  # Sagittal
-            return (slice_idx, int(x), int(y))
+            return (float(slice_idx), float(x), float(y))
         elif axis == 1:  # Coronal
-            return (int(x), slice_idx, int(y))
+            return (float(x), float(slice_idx), float(y))
         else:  # Axial
-            return (int(x), int(y), slice_idx)
+            return (float(x), float(y), float(slice_idx))
 
     def add_graphics_items(self, measurement_id: int, view_name: str, line_item, text_item, arrow_item=None):
         """Track graphics items for a measurement."""
@@ -802,7 +803,7 @@ class MeasurementManager(QObject):
         with open(filepath, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             writer.writerow([
-                'ID', 'Type', 'View', 'Slice',
+                'ID', 'Type', 'View', 'Slice', 'Rotation (degrees)',
                 'Start Voxel X', 'Start Voxel Y', 'Start Voxel Z',
                 'End Voxel X', 'End Voxel Y', 'End Voxel Z',
                 'Start World X', 'Start World Y', 'Start World Z',
@@ -811,7 +812,7 @@ class MeasurementManager(QObject):
             ])
             for m in self.measurements.values():
                 writer.writerow([
-                    m.id, m.type, m.view_name, m.slice_idx,
+                    m.id, m.type, m.view_name, m.slice_idx, m.rotation,
                     m.start_voxel[0], m.start_voxel[1], m.start_voxel[2],
                     m.end_voxel[0], m.end_voxel[1], m.end_voxel[2],
                     m.start_world[0], m.start_world[1], m.start_world[2],
@@ -987,7 +988,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("Version 0.1.3")
+        version_label = QLabel("Version 0.1.4")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -1053,7 +1054,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
         
         # Version info
-        version_label = QLabel("版本 0.1.3")
+        version_label = QLabel("版本 0.1.4")
         version_label.setStyleSheet("font-size: 14px; color: #ccc; margin-bottom: 15px;")
         version_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(version_label)
@@ -1158,13 +1159,14 @@ class SliceView(QGraphicsView):
         """Connect to data model."""
         self.model = model
     
-    def set_image(self, qimage: QImage) -> None:
-        """Update displayed image with QPixmapCache optimization."""
+    def set_image(self, qimage: QImage, rotation: int = 0) -> None:
+        """Update displayed image with QPixmapCache optimization and handle rotation via transform."""
         if qimage.isNull():
             self.pixmap_item.setPixmap(QPixmap())
+            self.pixmap_item.setTransform(QTransform())  # Reset transform
             return
         
-        # Generate cache key based on image properties and view name
+        # Generate cache key based on image properties and view name (without rotation)
         cache_key = f"{self.view_name}_{qimage.cacheKey()}_{qimage.format()}"
         pixmap = QPixmapCache.find(cache_key)
         
@@ -1174,6 +1176,14 @@ class SliceView(QGraphicsView):
             QPixmapCache.insert(cache_key, pixmap)
         
         self.pixmap_item.setPixmap(pixmap)
+        
+        # Apply rotation as pixmap transform instead of image transform
+        if rotation != 0:
+            transform = QTransform()
+            transform.rotate(rotation)
+            self.pixmap_item.setTransform(transform)
+        else:
+            self.pixmap_item.setTransform(QTransform())  # Reset to identity
         
         # Fit in view on first load
         if self.transform().m11() == 1.0:  # No previous scaling
@@ -1213,9 +1223,8 @@ class SliceView(QGraphicsView):
             start_draw_y = h - 1 - start_img_pos.y()
 
             line = QGraphicsLineItem(start_img_pos.x(), start_draw_y,
-                                     start_img_pos.x(), start_draw_y)
+                                     start_img_pos.x(), start_draw_y, parent=self.pixmap_item)
             line.setPen(QPen(QColor(255, 255, 0), 2))
-            self.scene.addItem(line)
             self._measure_temp_item = line
         elif event.button() == Qt.LeftButton and self.measure_mode == 'erase':
             # Delete measurement under cursor
@@ -1317,9 +1326,16 @@ class SliceView(QGraphicsView):
         if not self.snap_enabled or not hasattr(self, 'controller') or not self.controller:
             return None
             
-        scene_pos = self.mapToScene(mouse_pos.toPoint())
+        # Use item coordinates for consistent comparison
+        mouse_img = self.map_view_to_image_coords(mouse_pos)
         nearest_point = None
         min_distance = self.snap_distance
+        
+        if not hasattr(self.pixmap_item, 'pixmap') or self.pixmap_item.pixmap().isNull():
+            return None
+            
+        h = self.pixmap_item.pixmap().height()
+        mouse_item = QPointF(mouse_img.x(), h - 1 - mouse_img.y())
         
         # Check all measurement endpoints
         for measurement in self.controller.measurement_manager.measurements.values():
@@ -1331,7 +1347,7 @@ class SliceView(QGraphicsView):
             if measurement.slice_idx != current_slice:
                 continue
             
-            # Get measurement endpoints in scene coordinates
+            # Get measurement endpoints in image coordinates
             axis = self.model.view_configs[self.view_name]['axis'] if self.model else 2
             if axis == 0:  # Sagittal
                 p1_img = QPointF(measurement.start_voxel[1], measurement.start_voxel[2])
@@ -1343,22 +1359,20 @@ class SliceView(QGraphicsView):
                 p1_img = QPointF(measurement.start_voxel[0], measurement.start_voxel[1])
                 p2_img = QPointF(measurement.end_voxel[0], measurement.end_voxel[1])
             
-            # Apply Y-flip for scene coordinates
-            if hasattr(self.pixmap_item, 'pixmap') and not self.pixmap_item.pixmap().isNull():
-                h = self.pixmap_item.pixmap().height()
-                p1_scene = QPointF(p1_img.x(), h - 1 - p1_img.y())
-                p2_scene = QPointF(p2_img.x(), h - 1 - p2_img.y())
-                
-                # Calculate distances
-                dist1 = ((scene_pos.x() - p1_scene.x())**2 + (scene_pos.y() - p1_scene.y())**2)**0.5
-                dist2 = ((scene_pos.x() - p2_scene.x())**2 + (scene_pos.y() - p2_scene.y())**2)**0.5
-                
-                if dist1 < min_distance:
-                    min_distance = dist1
-                    nearest_point = p1_img  # Return in image coordinates
-                if dist2 < min_distance:
-                    min_distance = dist2
-                    nearest_point = p2_img  # Return in image coordinates
+            # Convert to item coordinates (with Y-flip) for distance calculation
+            p1_item = QPointF(p1_img.x(), h - 1 - p1_img.y())
+            p2_item = QPointF(p2_img.x(), h - 1 - p2_img.y())
+            
+            # Calculate distances in item coordinates
+            dist1 = ((mouse_item.x() - p1_item.x())**2 + (mouse_item.y() - p1_item.y())**2)**0.5
+            dist2 = ((mouse_item.x() - p2_item.x())**2 + (mouse_item.y() - p2_item.y())**2)**0.5
+            
+            if dist1 < min_distance:
+                min_distance = dist1
+                nearest_point = p1_img  # Return in image coordinates
+            if dist2 < min_distance:
+                min_distance = dist2
+                nearest_point = p2_img  # Return in image coordinates
                     
         return nearest_point
     
@@ -1367,24 +1381,26 @@ class SliceView(QGraphicsView):
         self._clear_snap_preview()
         
         if hasattr(self.pixmap_item, 'pixmap') and not self.pixmap_item.pixmap().isNull():
-            # Convert to scene coordinates for drawing
+            # Convert to item coordinates for drawing
             h = self.pixmap_item.pixmap().height()
-            scene_point = QPointF(snap_point.x(), h - 1 - snap_point.y())
+            item_point = QPointF(snap_point.x(), h - 1 - snap_point.y())
             
-            # Create snap preview circle (radius matches snap distance)
+            # Create snap preview circle (radius matches snap distance) as child of pixmap_item
             radius = self.snap_distance // 2  # Half of snap distance
             self._snap_preview_item = QGraphicsEllipseItem(
-                scene_point.x() - radius, scene_point.y() - radius, 
-                radius * 2, radius * 2
+                item_point.x() - radius, item_point.y() - radius, 
+                radius * 2, radius * 2, parent=self.pixmap_item
             )
             self._snap_preview_item.setPen(QPen(QColor(255, 255, 0, 200), 2))  # Yellow with transparency
             self._snap_preview_item.setBrush(QBrush(QColor(255, 255, 0, 100)))  # Semi-transparent fill
-            self.scene.addItem(self._snap_preview_item)
     
     def _clear_snap_preview(self):
         """Clear snap preview graphics."""
         if self._snap_preview_item:
-            if self._snap_preview_item.scene():
+            # Since it's now a child item, we can directly delete it or set parent to None
+            if self._snap_preview_item.parentItem():
+                self._snap_preview_item.setParentItem(None)
+            elif self._snap_preview_item.scene():
                 self.scene.removeItem(self._snap_preview_item)
             self._snap_preview_item = None
 
@@ -2309,22 +2325,23 @@ class ViewerController(QObject):
         # Add to measurement list widget with enhanced display format
         display_text = (f"Line {measurement.id}: {measurement.length_mm:.2f} mm\n"
                        f"  {measurement.view_name.title()} view, slice {measurement.slice_idx}")
-        list_item = self.view.measurements_list.addItem(display_text)
-        if hasattr(list_item, 'setData'):
-            list_item.setData(Qt.UserRole, measurement.id)
-        elif isinstance(list_item, int): # addItem returns int position
-            actual_item = self.view.measurements_list.item(list_item)
-            if actual_item:
-                actual_item.setData(Qt.UserRole, measurement.id)
-                # Add tooltip with detailed information
-                tooltip_text = (f"Length: {measurement.length_mm:.2f} mm\n"
-                              f"View: {measurement.view_name.title()}\n"
-                              f"Slice: {measurement.slice_idx}\n"
-                              f"Start: ({measurement.start_world[0]:.1f}, {measurement.start_world[1]:.1f}, {measurement.start_world[2]:.1f})\n"
-                              f"End: ({measurement.end_world[0]:.1f}, {measurement.end_world[1]:.1f}, {measurement.end_world[2]:.1f})\n"
-                              f"Double-click to navigate to slice"
-                              )
-                actual_item.setToolTip(tooltip_text)
+        
+        # Create QListWidgetItem object and set data properly
+        list_item = QListWidgetItem(display_text)
+        list_item.setData(Qt.UserRole, measurement.id)
+        
+        # Add tooltip with detailed information
+        tooltip_text = (f"Length: {measurement.length_mm:.2f} mm\n"
+                      f"View: {measurement.view_name.title()}\n"
+                      f"Slice: {measurement.slice_idx}\n"
+                      f"Start: ({measurement.start_world[0]:.1f}, {measurement.start_world[1]:.1f}, {measurement.start_world[2]:.1f})\n"
+                      f"End: ({measurement.end_world[0]:.1f}, {measurement.end_world[1]:.1f}, {measurement.end_world[2]:.1f})\n"
+                      f"Double-click to navigate to slice"
+                      )
+        list_item.setToolTip(tooltip_text)
+        
+        # Add item to the list widget
+        self.view.measurements_list.addItem(list_item)
     
     def _create_measurement_graphics(self, measurement: Measurement, view_name: str):
         """Create graphics items for a measurement in a specific view."""
@@ -2353,15 +2370,14 @@ class ViewerController(QObject):
         p1_draw = QPointF(p1_img.x(), h - 1 - p1_img.y())
         p2_draw = QPointF(p2_img.x(), h - 1 - p2_img.y())
 
-        # Create line graphics item
-        line = QGraphicsLineItem(p1_draw.x(), p1_draw.y(), p2_draw.x(), p2_draw.y())
+        # Create line graphics item as child of pixmap_item
+        line = QGraphicsLineItem(p1_draw.x(), p1_draw.y(), p2_draw.x(), p2_draw.y(), parent=view.pixmap_item)
         line.setPen(QPen(measurement.line_color, measurement.line_width))
         line.setData(0, measurement.id)  # Store measurement ID
         line.setFlag(QGraphicsLineItem.ItemIsSelectable, True)
-        view.scene.addItem(line)
 
-        # Create text graphics item
-        text = QGraphicsSimpleTextItem(f"{measurement.length_mm:.2f} mm")
+        # Create text graphics item as child of pixmap_item
+        text = QGraphicsSimpleTextItem(f"{measurement.length_mm:.2f} mm", parent=view.pixmap_item)
         text.setBrush(QBrush(measurement.text_color))
         # Set font with custom size and weight
         font = text.font()
@@ -2369,13 +2385,15 @@ class ViewerController(QObject):
         font.setWeight(measurement.text_font_weight)
         text.setFont(font)
         
+        # Text position follows pixmap_item but appearance ignores transformations (stays upright)
+        text.setFlag(QGraphicsSimpleTextItem.ItemIgnoresTransformations, True)
+        
         # Use intelligent text positioning with collision avoidance and persistence
         line_center = QPointF((p1_draw.x() + p2_draw.x()) / 2, (p1_draw.y() + p2_draw.y()) / 2)
         text_pos = self._calculate_text_position(view, p1_draw, p2_draw, text, measurement)
         text.setPos(text_pos)
         text.setData(0, measurement.id)
         text.setFlag(QGraphicsSimpleTextItem.ItemIsSelectable, True)
-        view.scene.addItem(text)
         
         # Add arrow only if text is significantly displaced from line center
         arrow_item = None
@@ -2383,7 +2401,8 @@ class ViewerController(QObject):
                                (text_pos.y() - line_center.y()) ** 2) ** 0.5
         if distance_from_center > 8:  # Small threshold - since text is much closer now
             arrow_item = self._create_arrow_annotation(text_pos, line_center, measurement)
-            view.scene.addItem(arrow_item)
+            if arrow_item:
+                arrow_item.setParentItem(view.pixmap_item)
         
         # Track graphics items (including optional arrow)
         self.measurement_manager.add_graphics_items(measurement.id, view_name, line, text, arrow_item)
@@ -2779,7 +2798,8 @@ class ViewerController(QObject):
                 new_arrow_item = None
                 if distance_from_center > 8:
                     new_arrow_item = self._create_arrow_annotation(new_text_pos, line_center, measurement)
-                    view.scene.addItem(new_arrow_item)
+                    if new_arrow_item:
+                        new_arrow_item.setParentItem(view.pixmap_item)
                 
                 # Update graphics items tracking
                 self.measurement_manager.add_graphics_items(measurement.id, view_name, line_item, text_item, new_arrow_item)
@@ -3255,6 +3275,8 @@ class ViewerController(QObject):
         config = self.model.view_configs[view_name]
         config['rotation'] = (config['rotation'] + 90) % 360
         self._update_view(view_name)
+        # Auto fit after rotation to avoid manual F key press
+        self.view.slice_views[view_name].reset_view()
     
     def _on_global_overlay_toggled(self, checked: bool) -> None:
         """Handle global overlay toggle."""
@@ -3407,9 +3429,10 @@ class ViewerController(QObject):
         # Render slice
         qimage = self.model.render_slice(view_name, slice_idx, show_overlay, alpha)
         
-        # Update view
+        # Update view with rotation
         slice_view = self.view.slice_views[view_name]
-        slice_view.set_image(qimage)
+        rotation = config['rotation']
+        slice_view.set_image(qimage, rotation)
         
         # Trigger preloading with debounce
         self.preload_timer.start(200)  # 200ms delay to avoid excessive preloading

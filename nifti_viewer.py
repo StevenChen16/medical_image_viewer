@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
     QSlider, QLabel, QCheckBox, QPushButton, QMenuBar, QStatusBar,
     QDockWidget, QGroupBox, QGridLayout, QSpinBox, QDoubleSpinBox,
     QFileDialog, QMessageBox, QProgressBar, QToolTip, QFrame, QLineEdit,
-    QDialog, QTabWidget, QTextEdit, QScrollArea, QSizePolicy, QColorDialog
+    QDialog, QTabWidget, QTextEdit, QScrollArea, QSizePolicy, QColorDialog, QListWidget, QGraphicsLineItem, QGraphicsSimpleTextItem
 )
 from PySide6.QtCore import (
     Qt, QObject, Signal, QThread, QRunnable, QThreadPool, QTimer,
@@ -123,9 +123,9 @@ class ColorButton(QPushButton):
                 self.setColor(new_color)
 
 
-# ============================================================================
+# ============================================================================ 
 # MODEL LAYER - Data Management & Caching
-# ============================================================================
+# ============================================================================ 
 
 class ImageModel(QObject):
     """
@@ -134,7 +134,7 @@ class ImageModel(QObject):
     """
     
     # Signals
-    imageLoaded = Signal(str, tuple)  # filename, shape
+    imageLoaded = Signal(str, tuple, object, object)  # filename, shape, affine, spacing
     labelLoaded = Signal(str, int)    # filename, unique_labels_count
     sliceReady = Signal(str, int, QImage)  # view_name, slice_idx, image
     loadError = Signal(str)           # error_message
@@ -146,6 +146,8 @@ class ImageModel(QObject):
         # Core data storage
         self.image_data: Optional[np.ndarray] = None
         self.label_data: Optional[np.ndarray] = None
+        self.image_affine: Optional[np.ndarray] = None
+        self.image_spacing: Optional[Tuple[float, float, float]] = None
         
         # File paths
         self.image_path: str = ""
@@ -190,25 +192,39 @@ class ImageModel(QObject):
         # Configure QPixmapCache
         QPixmapCache.setCacheLimit(pixmap_cache_size)
         
-    def _load_image_data(self, filepath: str) -> np.ndarray:
+    def _load_image_data(self, filepath: str) -> Tuple[np.ndarray, np.ndarray, tuple]:
         """
         Internal helper to load medical image data from various formats.
-        Returns a NumPy array in (X, Y, Z) orientation.
+        Returns a tuple of (NumPy array, affine matrix, voxel spacing).
         """
         file_ext = "".join(Path(filepath).suffixes).lower()
 
         if file_ext in ['.nii', '.nii.gz']:
             img = nib.load(filepath)
-            return img.get_fdata(dtype=np.float32)
+            affine = img.affine
+            spacing = img.header.get_zooms()
+            return img.get_fdata(dtype=np.float32), affine, spacing
         
         elif file_ext in ['.mha', '.mhd']:
             if not SITK_AVAILABLE:
                 raise ImportError("SimpleITK is required to load MHA/MHD files. Please run: pip install SimpleITK")
             
             itk_img = sitk.ReadImage(filepath)
+            spacing = itk_img.GetSpacing()
+            origin = itk_img.GetOrigin()
+            
+            # Create a simplified affine matrix from spacing and origin
+            affine = np.eye(4)
+            affine[0, 0] = spacing[0]
+            affine[1, 1] = spacing[1]
+            affine[2, 2] = spacing[2]
+            affine[0, 3] = origin[0]
+            affine[1, 3] = origin[1]
+            affine[2, 3] = origin[2]
+
             # Transpose from ITK's (Z, Y, X) to nibabel's (X, Y, Z) convention
             np_array = sitk.GetArrayFromImage(itk_img)
-            return np_array.transpose(2, 1, 0).astype(np.float32)
+            return np_array.transpose(2, 1, 0).astype(np.float32), affine, spacing
         
         else:
             raise ValueError(f"Unsupported file format: {file_ext}")
@@ -395,7 +411,7 @@ class ImageModel(QObject):
                 img_rgb = np.ascontiguousarray(img_rgb)
                 height, width, _ = img_rgb.shape
                 bytes_per_line = 3 * width
-                qimage = QImage(img_rgb.data, width, height, bytes_per_line, QImage.Format_RGB888)
+                qimage = QImage(img_rgb.copy().data, width, height, bytes_per_line, QImage.Format_RGB888)
             else:
                 has_overlay = False
         
@@ -404,7 +420,7 @@ class ImageModel(QObject):
             img_flipped = np.flipud(img_normalized)
             img_flipped = np.ascontiguousarray(img_flipped)
             height, width = img_flipped.shape
-            qimage = QImage(img_flipped.data, width, height, img_flipped.strides[0], QImage.Format_Grayscale8)
+            qimage = QImage(img_flipped.copy().data, width, height, img_flipped.strides[0], QImage.Format_Grayscale8)
 
         if rotation != 0 and not qimage.isNull():
             transform = QTransform()
@@ -417,7 +433,7 @@ class ImageModel(QObject):
         """Load medical image data."""
         try:
             self.loadProgress.emit(0)
-            self.image_data = self._load_image_data(filepath)
+            self.image_data, self.image_affine, self.image_spacing = self._load_image_data(filepath)
             self.image_path = filepath
             self.loadProgress.emit(70)
 
@@ -431,7 +447,7 @@ class ImageModel(QObject):
                 config['slice'] = self.image_data.shape[config['axis']] // 2
 
             self.loadProgress.emit(100)
-            self.imageLoaded.emit(filepath, self.image_data.shape)
+            self.imageLoaded.emit(filepath, self.image_data.shape, self.image_affine, self.image_spacing)
 
         except Exception as e:
             self.loadError.emit(f"Failed to load image: {str(e)}")
@@ -440,7 +456,8 @@ class ImageModel(QObject):
         """Load medical label data."""
         try:
             self.loadProgress.emit(0)
-            new_label_data = self._load_image_data(filepath).astype(np.int32)
+            new_label_data, _, _ = self._load_image_data(filepath)
+            new_label_data = new_label_data.astype(np.int32)
             self.loadProgress.emit(70)
 
             # Validate shape compatibility
@@ -603,9 +620,141 @@ class ImageModel(QObject):
         self._current_label_values = self.get_unique_label_values()
 
 
-# ============================================================================
+# ============================================================================ 
+# MEASUREMENT LAYER - Measurement Management
+# ============================================================================ 
+import dataclasses
+import time
+import csv
+
+@dataclasses.dataclass
+class Measurement:
+    """Data class for a single measurement."""
+    id: int
+    type: str  # 'line', 'angle', 'roi'
+    view_name: str
+    slice_idx: int
+    start_voxel: Tuple[int, int, int]
+    end_voxel: Tuple[int, int, int]
+    start_world: Tuple[float, float, float]
+    end_world: Tuple[float, float, float]
+    length_mm: float
+    timestamp: float
+
+class MeasurementManager(QObject):
+    """Manages all measurement data and related graphics items."""
+    measurementAdded = Signal(object)  # measurement object
+    measurementRemoved = Signal(int)   # measurement id
+    settingsChanged = Signal()         # Emitted when measurement display settings change
+
+    def __init__(self, model: ImageModel):
+        super().__init__()
+        self.model = model
+        self.measurements: Dict[int, Measurement] = {}
+        self._next_id = 1
+
+        # Measurement display settings
+        self.line_width = 1
+        self.line_color = QColor(255, 0, 0) # Red
+        self.text_color = QColor(255, 0, 0) # Red
+        self.font_size = 6 # pt
+
+    def add_line_measurement(self, view_name: str, slice_idx: int, start_pos: tuple, end_pos: tuple):
+        """Create and store a new line measurement."""
+        if self.model.image_affine is None or self.model.image_spacing is None:
+            return
+
+        # Voxel coordinates
+        start_voxel = self._get_voxel_coords(view_name, slice_idx, start_pos)
+        end_voxel = self._get_voxel_coords(view_name, slice_idx, end_pos)
+
+        # World coordinates
+        start_world = nib.affines.apply_affine(self.model.image_affine, start_voxel)
+        end_world = nib.affines.apply_affine(self.model.image_affine, end_voxel)
+
+        # Length calculation
+        length_mm = np.linalg.norm(np.array(start_world) - np.array(end_world))
+
+        measurement = Measurement(
+            id=self._next_id,
+            type='line',
+            view_name=view_name,
+            slice_idx=slice_idx,
+            start_voxel=start_voxel,
+            end_voxel=end_voxel,
+            start_world=tuple(start_world),
+            end_world=tuple(end_world),
+            length_mm=length_mm,
+            timestamp=time.time()
+        )
+
+        self.measurements[self._next_id] = measurement
+        self.measurementAdded.emit(measurement)
+        self._next_id += 1
+
+    def _get_voxel_coords(self, view_name: str, slice_idx: int, pos: tuple) -> Tuple[int, int, int]:
+        """Convert 2D slice position to 3D voxel coordinates."""
+        x, y = pos
+        axis = self.model.view_configs[view_name]['axis']
+        if axis == 0:  # Sagittal
+            return (slice_idx, int(x), int(y))
+        elif axis == 1:  # Coronal
+            return (int(x), slice_idx, int(y))
+        else:  # Axial
+            return (int(x), int(y), slice_idx)
+
+    def remove_measurement(self, measurement_id: int):
+        """Remove a measurement by its ID."""
+        if measurement_id in self.measurements:
+            del self.measurements[measurement_id]
+            self.measurementRemoved.emit(measurement_id)
+
+    def export_csv(self, filepath: str):
+        """Export all measurements to a CSV file."""
+        with open(filepath, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow([
+                'ID', 'Type', 'View', 'Slice',
+                'Start Voxel X', 'Start Voxel Y', 'Start Voxel Z',
+                'End Voxel X', 'End Voxel Y', 'End Voxel Z',
+                'Start World X', 'Start World Y', 'Start World Z',
+                'End World X', 'End World Y', 'End World Z',
+                'Length (mm)', 'Timestamp'
+            ])
+            for m in self.measurements.values():
+                writer.writerow([
+                    m.id, m.type, m.view_name, m.slice_idx,
+                    m.start_voxel[0], m.start_voxel[1], m.start_voxel[2],
+                    m.end_voxel[0], m.end_voxel[1], m.end_voxel[2],
+                    m.start_world[0], m.start_world[1], m.start_world[2],
+                    m.end_world[0], m.end_world[1], m.end_world[2],
+                    m.length_mm, m.timestamp
+                ])
+
+    def set_line_width(self, width: int):
+        if self.line_width != width:
+            self.line_width = width
+            self.settingsChanged.emit()
+
+    def set_line_color(self, color: QColor):
+        if self.line_color != color:
+            self.line_color = color
+            self.settingsChanged.emit()
+
+    def set_text_color(self, color: QColor):
+        if self.text_color != color:
+            self.text_color = color
+            self.settingsChanged.emit()
+
+    def set_font_size(self, size: int):
+        if self.font_size != size:
+            self.font_size = size
+            self.settingsChanged.emit()
+
+
+# ============================================================================ 
 # WORKER LAYER - Background Loading
-# ============================================================================
+# ============================================================================ 
 
 class LoadWorker(QRunnable):
     """Background worker for non-blocking file loading."""
@@ -654,9 +803,9 @@ class PreloadWorker(QRunnable):
             pass
 
 
-# ============================================================================
+# ============================================================================ 
 # VIEW LAYER - UI Components
-# ============================================================================
+# ============================================================================ 
 
 class AboutDialog(QDialog):
     """
@@ -756,7 +905,7 @@ class AboutDialog(QDialog):
             <li><b>Load Files:</b> Use File menu → Load Image/Labels, or type paths in the right panel</li>
             <li><b>Navigate:</b> Mouse wheel scrolls through slices, Ctrl+wheel zooms in/out</li>
             <li><b>Pan & Rotate:</b> Right-click drag to move view, click rotation buttons to flip</li>
-            <li><b>Overlays:</b> Check "Show Overlay" and adjust transparency slider</li>
+            <li><b>Overlays:</b> Check \"Show Overlay\" and adjust transparency slider</li>
             <li><b>Save:</b> File → Save Screenshot (Ctrl+S) or Volume (Ctrl+Shift+S)</li>
         </ul>
         
@@ -863,12 +1012,16 @@ class SliceView(QGraphicsView):
     # Signals
     mousePositionChanged = Signal(int, int)  # x, y coordinates
     wheelScrolled = Signal(int)              # delta for slice navigation
+    lineMeasured = Signal(object, object)    # start_pos, end_pos in image coordinates
     
     def __init__(self, view_name: str, parent=None):
         super().__init__(parent)
         
         self.view_name = view_name
         self.model: Optional[ImageModel] = None
+        self.measure_mode = 'off'  # 'off', 'line'
+        self._measure_points = []
+        self._measure_temp_item = None
         
         # Graphics setup
         self.scene = QGraphicsScene()
@@ -936,6 +1089,19 @@ class SliceView(QGraphicsView):
             self._panning = True
             self._pan_start = event.position()
             self.setCursor(Qt.ClosedHandCursor)
+        elif event.button() == Qt.LeftButton and self.measure_mode == 'line':
+            start_img_pos = self.map_view_to_image_coords(event.position())
+            self._measure_points = [start_img_pos]
+            
+            # Flip Y for drawing on scene (which is already flipped)
+            h = self.pixmap_item.pixmap().height()
+            start_draw_y = h - 1 - start_img_pos.y()
+
+            line = QGraphicsLineItem(start_img_pos.x(), start_draw_y,
+                                     start_img_pos.x(), start_draw_y)
+            line.setPen(QPen(QColor(255, 255, 0), 2))
+            self.scene.addItem(line)
+            self._measure_temp_item = line
         else:
             super().mousePressEvent(event)
     
@@ -949,6 +1115,15 @@ class SliceView(QGraphicsView):
             self.verticalScrollBar().setValue(
                 self.verticalScrollBar().value() - int(delta.y()))
             self._pan_start = event.position()
+        elif self.measure_mode == 'line' and self._measure_temp_item:
+            p2_img = self.map_view_to_image_coords(event.position())
+            
+            # Flip Y for drawing on scene
+            h = self.pixmap_item.pixmap().height()
+            p2_draw_y = h - 1 - p2_img.y()
+
+            self._measure_temp_item.setLine(self._measure_points[0].x(), h - 1 - self._measure_points[0].y(),
+                                            p2_img.x(), p2_draw_y)
         else:
             # Emit position for tooltip
             scene_pos = self.mapToScene(event.position().toPoint())
@@ -965,8 +1140,34 @@ class SliceView(QGraphicsView):
         if event.button() == Qt.RightButton and self._panning:
             self._panning = False
             self.setCursor(Qt.ArrowCursor)
+        elif event.button() == Qt.LeftButton and self.measure_mode == 'line' and self._measure_temp_item:
+            end_img_pos = self.map_view_to_image_coords(event.position())
+            self._measure_points.append(end_img_pos)
+            self.scene.removeItem(self._measure_temp_item)
+            self._measure_temp_item = None
+            self.lineMeasured.emit(self._measure_points[0], self._measure_points[1])
+            self._measure_points = []
         
         super().mouseReleaseEvent(event)
+
+    def map_view_to_image_coords(self, view_pos: QPointF) -> QPointF:
+        """Map a point from view coordinates to original image coordinates."""
+        # Map from view to scene
+        scene_pos = self.mapToScene(view_pos.toPoint())
+
+        # Map from scene to the pixmap item (which is the displayed slice)
+        item_pos = self.pixmap_item.mapFromScene(scene_pos)
+
+        # The pixmap might be transformed (rotated). We need the inverse transform.
+        img_to_item_transform = self.pixmap_item.transform()
+        item_to_img_transform, _ = img_to_item_transform.inverted()
+        img_pos = item_to_img_transform.map(item_pos)
+
+        # The image was flipped vertically during rendering. We need to un-flip it.
+        h = self.pixmap_item.pixmap().height()
+        final_pos = QPointF(img_pos.x(), h - 1 - img_pos.y())
+
+        return final_pos
     
     def reset_view(self) -> None:
         """Reset zoom and pan to fit image."""
@@ -980,8 +1181,9 @@ class MainWindow(QMainWindow):
     Main application window with menu, three-view layout, and controls.
     """
     
-    def __init__(self):
+    def __init__(self, controller):
         super().__init__()
+        self.controller = controller
         
         self.setWindowTitle("Medical Image Viewer")
         self.setWindowIcon(QIcon("media/logo.png"))
@@ -1169,6 +1371,45 @@ class MainWindow(QMainWindow):
         self.label_colors_group = create_collapsible_group("Label Colors", self.label_colors_layout)
         self.label_colors_group.setChecked(False)  # Start collapsed
         dock_layout.addWidget(self.label_colors_group)
+
+        # Measurement controls
+        measure_layout = QVBoxLayout()
+        self.line_tool_btn = QPushButton("Line Tool")
+        self.line_tool_btn.setCheckable(True)
+        self.export_measurements_btn = QPushButton("Export CSV")
+        self.measurements_list = QListWidget()
+        measure_layout.addWidget(self.line_tool_btn)
+        measure_layout.addWidget(self.export_measurements_btn)
+        measure_layout.addWidget(self.measurements_list)
+
+        # Measurement Settings
+        settings_layout = QGridLayout()
+        settings_layout.addWidget(QLabel("Line Width:"), 0, 0)
+        self.line_width_spinbox = QSpinBox()
+        self.line_width_spinbox.setRange(1, 10) # 1 to 10 pixels
+        self.line_width_spinbox.setValue(1) # Default to 1 pixel
+        settings_layout.addWidget(self.line_width_spinbox, 0, 1)
+
+        settings_layout.addWidget(QLabel("Line Color:"), 1, 0)
+        self.line_color_btn = ColorButton(color=(255, 0, 0)) # Default red
+        settings_layout.addWidget(self.line_color_btn, 1, 1)
+
+        settings_layout.addWidget(QLabel("Text Color:"), 2, 0)
+        self.text_color_btn = ColorButton(color=(255, 0, 0)) # Default red
+        settings_layout.addWidget(self.text_color_btn, 2, 1)
+
+        settings_layout.addWidget(QLabel("Font Size:"), 3, 0)
+        self.font_size_spinbox = QSpinBox()
+        self.font_size_spinbox.setRange(6, 24) # 6 to 24 pt
+        self.font_size_spinbox.setValue(6) # Default to 6 pt
+        settings_layout.addWidget(self.font_size_spinbox, 3, 1)
+
+        settings_group = create_collapsible_group("Measurement Settings", settings_layout)
+        settings_group.setChecked(False) # Start collapsed
+        dock_layout.addWidget(settings_group)
+        
+        measure_group = create_collapsible_group("Measurement Tools", measure_layout)
+        dock_layout.addWidget(measure_group)
         
         # Store color buttons for each label
         self.label_color_buttons = {}
@@ -1317,10 +1558,16 @@ class MainWindow(QMainWindow):
         self.coord_label = QLabel("Position: -")
         self.status_bar.addPermanentWidget(self.coord_label)
 
+    def keyPressEvent(self, event):
+        """Handle key presses for deleting measurements."""
+        if event.key() == Qt.Key_Delete:
+            self.controller.delete_selected_measurement()
+        super().keyPressEvent(event)
 
-# ============================================================================
+
+# ============================================================================ 
 # CONTROLLER LAYER - Business Logic & Signal-Slot Binding
-# ============================================================================
+# ============================================================================ 
 
 class ViewerController(QObject):
     """
@@ -1328,11 +1575,11 @@ class ViewerController(QObject):
     Handles all user interactions, signal-slot connections, and business logic.
     """
     
-    def __init__(self, model: ImageModel, view: MainWindow, preload_count: int = 2):
+    def __init__(self, model: ImageModel, preload_count: int = 2):
         super().__init__()
         
         self.model = model
-        self.view = view
+        self.measurement_manager = MeasurementManager(model)
         self.thread_pool = QThreadPool()
         self.preload_thread_pool = QThreadPool()
         self.preload_thread_pool.setMaxThreadCount(2)  # Limit preload threads
@@ -1349,10 +1596,13 @@ class ViewerController(QObject):
         self.preload_timer.setSingleShot(True)
         self.preload_timer.timeout.connect(self._preload_adjacent_slices)
         
+    def set_view(self, view: MainWindow):
+        self.view = view
         # Setup connections
         self.setup_model_connections()
         self.setup_view_connections()
         self.setup_slice_view_connections()
+        self.setup_measurement_connections()
         
         # Connect models to slice views
         for slice_view in self.view.slice_views.values():
@@ -1418,6 +1668,178 @@ class ViewerController(QObject):
         for name, slice_view in self.view.slice_views.items():
             slice_view.wheelScrolled.connect(partial(self._on_wheel_scroll, name))
             slice_view.mousePositionChanged.connect(partial(self._on_mouse_position, name))
+            slice_view.lineMeasured.connect(partial(self._on_line_measured, name))
+
+    def setup_measurement_connections(self):
+        """Connect measurement-related signals."""
+        self.view.line_tool_btn.clicked.connect(self.toggle_line_tool)
+        self.measurement_manager.measurementAdded.connect(self._on_measurement_added)
+        self.measurement_manager.measurementRemoved.connect(self._on_measurement_removed)
+    
+    def toggle_line_tool(self, checked: bool):
+        """Toggle the line measurement tool."""
+        mode = 'line' if checked else 'off'
+        for view in self.view.slice_views.values():
+            view.measure_mode = mode
+
+    def _on_line_measured(self, view_name: str, start_pos: QPointF, end_pos: QPointF):
+        """Handle a new line measurement from a slice view."""
+        slice_idx = self.model.view_configs[view_name]['slice']
+        self.measurement_manager.add_line_measurement(view_name, slice_idx, (start_pos.x(), start_pos.y()), (end_pos.x(), end_pos.y()))
+
+    def _on_measurement_added(self, measurement: Measurement):
+        """Add a graphical representation of the measurement to the scene."""
+        view = self.view.slice_views.get(measurement.view_name)
+        if not view:
+            return
+
+        # Only show measurement on the correct slice
+        if view.model.view_configs[measurement.view_name]['slice'] != measurement.slice_idx:
+            return
+
+        axis = self.model.view_configs[measurement.view_name]['axis']
+        if axis == 0: # Sagittal
+            p1_img = QPointF(measurement.start_voxel[1], measurement.start_voxel[2])
+            p2_img = QPointF(measurement.end_voxel[1], measurement.end_voxel[2])
+        elif axis == 1: # Coronal
+            p1_img = QPointF(measurement.start_voxel[0], measurement.start_voxel[2])
+            p2_img = QPointF(measurement.end_voxel[0], measurement.end_voxel[2])
+        else: # Axial
+            p1_img = QPointF(measurement.start_voxel[0], measurement.start_voxel[1])
+            p2_img = QPointF(measurement.end_voxel[0], measurement.end_voxel[1])
+
+        # Apply the same Y-flip as during rendering for consistent display
+        h = view.pixmap_item.pixmap().height()
+        p1_draw = QPointF(p1_img.x(), h - 1 - p1_img.y())
+        p2_draw = QPointF(p2_img.x(), h - 1 - p2_img.y())
+
+        line = QGraphicsLineItem(p1_draw.x(), p1_draw.y(), p2_draw.x(), p2_draw.y())
+        line.setPen(QPen(QColor(255, 0, 0), 2))
+        line.setData(0, measurement.id)  # Store measurement ID
+        view.scene.addItem(line)
+
+        text = QGraphicsSimpleTextItem(f"{measurement.length_mm:.2f} mm")
+        text.setBrush(QBrush(QColor(255, 0, 0)))
+        text.setPos((p1_draw.x() + p2_draw.x()) / 2, (p1_draw.y() + p2_draw.y()) / 2)
+        text.setPos((p1_draw.x() + p2_draw.x()) / 2, (p1_draw.y() + p2_draw.y()) / 2)
+        text.setData(0, measurement.id)
+        view.scene.addItem(text)
+
+    def _on_measurement_settings_changed(self):
+        """Redraw all measurements with new settings."""
+        # Clear all existing graphics items for measurements
+        for view_name, slice_view in self.view.slice_views.items():
+            items_to_remove = []
+            for item in slice_view.scene.items():
+                if item.data(0) in self.measurement_manager.measurements: # Check if it's a measurement item
+                    items_to_remove.append(item)
+            for item in items_to_remove:
+                slice_view.scene.removeItem(item)
+                del item
+
+        # Redraw all measurements with new settings
+        for measurement in self.measurement_manager.measurements.values():
+            self._on_measurement_added(measurement)
+
+    def _on_measurement_removed(self, measurement_id: int):
+        """Remove a measurement's graphics from all views."""
+        for i in range(self.view.measurements_list.count()):
+            item = self.view.measurements_list.item(i)
+            if item.data(Qt.UserRole) == measurement_id:
+                self.view.measurements_list.takeItem(i)
+                break
+
+        for view in self.view.slice_views.values():
+            for item in view.scene.items():
+                if item.data(0) == measurement_id:
+                    view.scene.removeItem(item)
+                    del item
+
+    def delete_selected_measurement(self):
+        """Delete the currently selected measurement."""
+        # Check list widget selection first
+        selected_list_items = self.view.measurements_list.selectedItems()
+        if selected_list_items:
+            measurement_id = selected_list_items[0].data(Qt.UserRole)
+            self.measurement_manager.remove_measurement(measurement_id)
+            return
+
+        for view in self.view.slice_views.values():
+            selected_items = view.scene.selectedItems()
+            if selected_items:
+                # Assuming the first selected item's data is the measurement ID
+                measurement_id = selected_items[0].data(0)
+                if measurement_id:
+                    self.measurement_manager.remove_measurement(measurement_id)
+                    break  # Assume only one measurement can be selected at a time
+
+    def export_measurements(self):
+        """Export measurements to a CSV file."""
+        if not self.measurement_manager.measurements:
+            QMessageBox.warning(self.view, "Warning", "No measurements to export.")
+            return
+
+        filepath, _ = QFileDialog.getSaveFileName(
+            self.view,
+            "Export Measurements",
+            "measurements.csv",
+            "CSV Files (*.csv)"
+        )
+
+        if filepath:
+            try:
+                self.measurement_manager.export_csv(filepath)
+                self.view.status_label.setText(f"Measurements exported to {Path(filepath).name}")
+            except Exception as e:
+                QMessageBox.critical(self.view, "Error", f"Failed to export measurements: {e}")
+
+        view.scene.addItem(text)
+
+    def _on_measurement_removed(self, measurement_id: int):
+        """Remove a measurement's graphics from all views."""
+        for view in self.view.slice_views.values():
+            for item in view.scene.items():
+                if item.data(0) == measurement_id:
+                    view.scene.removeItem(item)
+                    del item
+
+    def delete_selected_measurement(self):
+        """Delete the currently selected measurement."""
+        # Check list widget selection first
+        selected_list_items = self.view.measurements_list.selectedItems()
+        if selected_list_items:
+            measurement_id = selected_list_items[0].data(Qt.UserRole)
+            self.measurement_manager.remove_measurement(measurement_id)
+            return
+
+        for view in self.view.slice_views.values():
+            selected_items = view.scene.selectedItems()
+            if selected_items:
+                # Assuming the first selected item's data is the measurement ID
+                measurement_id = selected_items[0].data(0)
+                if measurement_id:
+                    self.measurement_manager.remove_measurement(measurement_id)
+                    break  # Assume only one measurement can be selected at a time
+
+    def export_measurements(self):
+        """Export measurements to a CSV file."""
+        if not self.measurement_manager.measurements:
+            QMessageBox.warning(self.view, "Warning", "No measurements to export.")
+            return
+
+        filepath, _ = QFileDialog.getSaveFileName(
+            self.view,
+            "Export Measurements",
+            "measurements.csv",
+            "CSV Files (*.csv)"
+        )
+
+        if filepath:
+            try:
+                self.measurement_manager.export_csv(filepath)
+                self.view.status_label.setText(f"Measurements exported to {Path(filepath).name}")
+            except Exception as e:
+                QMessageBox.critical(self.view, "Error", f"Failed to export measurements: {e}")
     
     def load_image(self) -> None:
         """Load image file dialog."""
@@ -1684,7 +2106,7 @@ class ViewerController(QObject):
         self.view.global_overlay_cb.toggled.connect(self._on_global_overlay_toggled)
         self.view.alpha_slider.valueChanged.connect(self._on_alpha_changed)
     
-    def _on_image_loaded(self, filepath: str, shape: tuple) -> None:
+    def _on_image_loaded(self, filepath: str, shape: tuple, affine: np.ndarray, spacing: tuple) -> None:
         """Handle successful image loading."""
         self.view.status_label.setText(f"Image loaded: {Path(filepath).name} - Shape: {shape}")
         
@@ -1773,6 +2195,13 @@ class ViewerController(QObject):
         
         # Debounced update
         self.update_timer.start(40)  # 40ms debounce for smooth scrolling
+
+        # Show/hide measurements
+        for mid, measurement in self.measurement_manager.measurements.items():
+            for item in self.view.slice_views[view_name].scene.items():
+                if item.data(0) == mid:
+                    is_visible = (measurement.view_name == view_name and measurement.slice_idx == value)
+                    item.setVisible(is_visible)
     
     def _on_wheel_scroll(self, view_name: str, delta: int) -> None:
         """Handle mouse wheel slice navigation."""
@@ -1995,176 +2424,42 @@ class ViewerController(QObject):
                 self.preload_thread_pool.start(worker)
 
 
-# ============================================================================
+# ============================================================================ 
 # MAIN APPLICATION
-# ============================================================================
+# ============================================================================ 
 
-def main() -> None:
-    """Main application entry point."""
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(
-        prog="nifti_viewer_qt",
-        description="Interactive medical image viewer: three-view display, label overlay, zoomable and rotatable.",
-        epilog="""
-Keyboard Shortcuts:
-  Ctrl+O     Load image file
-  Ctrl+L     Load label file  
-  Ctrl+S     Save current view as PNG
-  Ctrl+R     Reset views and cache
-  Ctrl+T     Toggle control panel visibility
-  Ctrl+Wheel Zoom view
-  Wheel      Navigate slices
-  Right-Drag Pan view
-  F          Fit all views
-  F1         Show about dialog
-        """,
-        formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument("-i", "--image", help="Load image file directly (.nii, .nii.gz, .mha, .mhd)")
-    parser.add_argument("-l", "--label", help="Load label file directly (.nii, .nii.gz, .mha, .mhd)")
-    parser.add_argument("-o", "--output", help="Default path for screenshot saving")
-    parser.add_argument("--pixmap-cache-size", type=int, default=102400, 
-                        help="QPixmapCache size in KB (default: 100MB)")
-    parser.add_argument("--preload-count", type=int, default=2, 
-                        help="Number of adjacent slices to preload (default: 2)")
-    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s 0.1.3")
-    parser.add_argument("--log-level", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], 
-                        default='INFO', help="Set logging level")
-    
-    args = parser.parse_args()
-    
-    # Configure logging
-    log_level = getattr(logging, args.log_level.upper())
-    logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
-    
+def main():
+    """Main function to run the application."""
+    # Set up logging
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
     # Create application
     app = QApplication(sys.argv)
-    app.setApplicationName("Medical Image Viewer")
-    app.setApplicationVersion("0.1.3")
     
-    # Set application style
-    app.setStyleSheet("""
-        QMainWindow {
-            background-color: #2b2b2b;
-        }
-        QDockWidget {
-            background-color: #3c3c3c;
-            color: white;
-        }
-        QGroupBox {
-            font-weight: bold;
-            border: 2px solid #555;
-            border-radius: 5px;
-            margin-top: 1ex;
-            color: white;
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            left: 10px;
-            padding: 0 5px 0 5px;
-        }
-        QGroupBox::indicator {
-            width: 18px;
-            height: 18px;
-            right: 5px;
-        }
-        QGroupBox::indicator:unchecked {
-            image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBmaWxsPSJjdXJyZW50Q29sb3IiPjxwYXRoIGQ9Ik0wIDBoMjR2MjRIMDB6IiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTEwIDE3bDUtNS01LTV2MTB6Ii8+PC9zdmc+);
-        }
-        QGroupBox::indicator:checked {
-            image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjI0IiBmaWxsPSJjdXJyZW50Q29sb3IiPjxwYXRoIGQ9Ik0wIDBoMjR2MjRIMDB6IiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTcgMTBsNSA1IDUtNXoiLz48L3N2Zz4=);
-        }
-        QPushButton {
-            background-color: #4a4a4a;
-            border: 1px solid #666;
-            padding: 5px;
-            border-radius: 3px;
-            color: white;
-        }
-        QPushButton:hover {
-            background-color: #5a5a5a;
-        }
-        QPushButton:pressed {
-            background-color: #3a3a3a;
-        }
-        QSlider::groove:horizontal {
-            border: 1px solid #666;
-            height: 8px;
-            background: #2b2b2b;
-            border-radius: 4px;
-        }
-        QSlider::handle:horizontal {
-            background: #4a90e2;
-            border: 1px solid #5c5c5c;
-            width: 18px;
-            margin: -2px 0;
-            border-radius: 3px;
-        }
-        QCheckBox {
-            color: white;
-        }
-        QLabel {
-            color: white;
-        }
-        QSpinBox {
-            background-color: #4a4a4a;
-            border: 1px solid #666;
-            padding: 2px;
-            color: white;
-        }
-        QLineEdit {
-            background-color: #4a4a4a;
-            border: 1px solid #666;
-            padding: 4px;
-            border-radius: 3px;
-            color: white;
-            selection-background-color: #4a90e2;
-        }
-        QLineEdit:focus {
-            border: 2px solid #4a90e2;
-        }
-        QStatusBar {
-            background-color: #3c3c3c;
-            color: white;
-        }
-    """)
+    # Create MVC components
+    model = ImageModel()
+    controller = ViewerController(model)
+    main_win = MainWindow(controller)
+    controller.set_view(main_win)
     
-    try:
-        # Create MVC components
-        model = ImageModel(pixmap_cache_size=args.pixmap_cache_size)
-        view = MainWindow()
-        controller = ViewerController(model, view, preload_count=args.preload_count)
-        
-        # Handle command line arguments
-        if args.image:
-            if Path(args.image).exists():
-                model.load_image(args.image)
-            else:
-                logging.warning(f"Image file not found: {args.image}")
-                
-        if args.label:
-            if Path(args.label).exists():
-                model.load_labels(args.label)
-            else:
-                logging.warning(f"Label file not found: {args.label}")
-        
-        # Store output path for screenshots
-        if args.output:
-            controller.default_output_path = args.output
-        
-        # Show main window
-        view.show()
-        
-        # Run application
-        sys.exit(app.exec())
-        
-    except Exception as e:
-        logging.error(f"Application error: {str(e)}")
-        logging.error(traceback.format_exc())
-        QMessageBox.critical(None, "Application Error", 
-                           f"Failed to start application:\n{str(e)}")
-        sys.exit(1)
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="NIfTI/MHA Viewer")
+    parser.add_argument("-i", "--image", help="Path to the input image file")
+    parser.add_argument("-l", "--labels", help="Path to the input label file")
+    parser.add_argument("-o", "--output", help="Default output path for screenshots")
+    args = parser.parse_args()
+    
+    # Load files from arguments
+    if args.image:
+        controller.thread_pool.start(LoadWorker(model, args.image, is_label=False))
+    if args.labels:
+        controller.thread_pool.start(LoadWorker(model, args.labels, is_label=True))
+    if args.output:
+        controller.default_output_path = args.output
 
+    # Show main window and run application
+    main_win.show()
+    sys.exit(app.exec())
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

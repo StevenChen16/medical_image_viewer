@@ -38,16 +38,17 @@ from PySide6.QtWidgets import (
     QDockWidget, QGroupBox, QGridLayout, QSpinBox, QDoubleSpinBox,
     QFileDialog, QMessageBox, QProgressBar, QToolTip, QFrame, QLineEdit,
     QDialog, QTabWidget, QTextEdit, QScrollArea, QSizePolicy, QColorDialog, 
-    QListWidget, QGraphicsLineItem, QGraphicsSimpleTextItem, QMenu, QComboBox, QGraphicsEllipseItem
+    QListWidget, QGraphicsLineItem, QGraphicsSimpleTextItem, QMenu, QComboBox, QGraphicsEllipseItem,
+    QGraphicsPathItem
 )
 from PySide6.QtCore import (
     Qt, QObject, Signal, QThread, QRunnable, QThreadPool, QTimer,
-    QRect, QSize, QPointF, QPoint
+    QRect, QRectF, QSize, QPointF, QPoint
 )
 from PySide6.QtGui import (
     QPixmap, QPainter, QImage, QPen, QBrush, QColor, QTransform,
     QAction, QIcon, QFont, QWheelEvent, QMouseEvent, QPixmapCache,
-    QShortcut, QCursor
+    QShortcut, QCursor, QPainterPath
 )
 
 
@@ -647,9 +648,9 @@ class Measurement:
         
         # Style properties
         self.line_color = QColor(255, 0, 0)  # Default red
-        self.line_width = 2.0  # Support float values
+        self.line_width = 1.5  # Thinner default line width
         self.text_color = QColor(255, 0, 0)  # Default red
-        self.text_font_size = 6.0  # Support float values  
+        self.text_font_size = 5.0  # Smaller default font size
         self.text_font_weight = QFont.Normal
     
     def apply_style(self, line_color=None, line_width=None, text_color=None, text_font_size=None, text_font_weight=None):
@@ -730,13 +731,17 @@ class MeasurementManager(QObject):
         else:  # Axial
             return (int(x), int(y), slice_idx)
 
-    def add_graphics_items(self, measurement_id: int, view_name: str, line_item, text_item):
+    def add_graphics_items(self, measurement_id: int, view_name: str, line_item, text_item, arrow_item=None):
         """Track graphics items for a measurement."""
         if measurement_id not in self._graphics_items:
             self._graphics_items[measurement_id] = {}
         if view_name not in self._graphics_items[measurement_id]:
             self._graphics_items[measurement_id][view_name] = []
-        self._graphics_items[measurement_id][view_name] = [line_item, text_item]
+        
+        items = [line_item, text_item]
+        if arrow_item:
+            items.append(arrow_item)
+        self._graphics_items[measurement_id][view_name] = items
     
     def remove_graphics_items(self, measurement_id: int, view_name: str = None):
         """Remove graphics items for a measurement from specified view or all views."""
@@ -1116,7 +1121,7 @@ class SliceView(QGraphicsView):
         
         # Snap system properties
         self.snap_enabled = True
-        self.snap_distance = 10  # pixels
+        self.snap_distance = 6  # pixels (match circle size)
         self._snap_preview_item = None
         self._current_snap_point = None
         
@@ -1187,7 +1192,11 @@ class SliceView(QGraphicsView):
             self._pan_start = event.position()
             self.setCursor(Qt.ClosedHandCursor)
         elif event.button() == Qt.LeftButton and self.measure_mode == 'line':
-            start_img_pos = self.map_view_to_image_coords(event.position())
+            # Use snap point if available, otherwise use mouse position
+            if self._current_snap_point:
+                start_img_pos = self._current_snap_point
+            else:
+                start_img_pos = self.map_view_to_image_coords(event.position())
             self._measure_points = [start_img_pos]
             
             # Flip Y for drawing on scene (which is already flipped)
@@ -1218,15 +1227,26 @@ class SliceView(QGraphicsView):
         elif self.measure_mode == 'erase':
             # Highlight measurement items under cursor
             self._highlight_measurements_under_cursor(event.position())
-        elif self.measure_mode == 'line' and self._measure_temp_item:
-            p2_img = self.map_view_to_image_coords(event.position())
-            
-            # Flip Y for drawing on scene
-            h = self.pixmap_item.pixmap().height()
-            p2_draw_y = h - 1 - p2_img.y()
+        elif self.measure_mode == 'line':
+            # Check for snap points when in line mode
+            snap_point = self._find_snap_point(event.position())
+            if snap_point:
+                self._show_snap_preview(snap_point)
+                self._current_snap_point = snap_point
+            else:
+                self._clear_snap_preview()
+                self._current_snap_point = None
+                
+            # Update temporary line if drawing
+            if self._measure_temp_item:
+                p2_img = self.map_view_to_image_coords(event.position())
+                
+                # Flip Y for drawing on scene
+                h = self.pixmap_item.pixmap().height()
+                p2_draw_y = h - 1 - p2_img.y()
 
-            self._measure_temp_item.setLine(self._measure_points[0].x(), h - 1 - self._measure_points[0].y(),
-                                            p2_img.x(), p2_draw_y)
+                self._measure_temp_item.setLine(self._measure_points[0].x(), h - 1 - self._measure_points[0].y(),
+                                                p2_img.x(), p2_draw_y)
         else:
             # Emit position for tooltip
             scene_pos = self.mapToScene(event.position().toPoint())
@@ -1244,10 +1264,17 @@ class SliceView(QGraphicsView):
             self._panning = False
             self.setCursor(Qt.ArrowCursor)
         elif event.button() == Qt.LeftButton and self.measure_mode == 'line' and self._measure_temp_item:
-            end_img_pos = self.map_view_to_image_coords(event.position())
+            # Use snap point if available, otherwise use mouse position
+            if self._current_snap_point:
+                end_img_pos = self._current_snap_point
+            else:
+                end_img_pos = self.map_view_to_image_coords(event.position())
             self._measure_points.append(end_img_pos)
             self.scene.removeItem(self._measure_temp_item)
             self._measure_temp_item = None
+            # Clear snap preview
+            self._clear_snap_preview()
+            self._current_snap_point = None
             self.lineMeasured.emit(self._measure_points[0], self._measure_points[1])
             self._measure_points = []
         
@@ -1272,6 +1299,82 @@ class SliceView(QGraphicsView):
 
         return final_pos
     
+    def _find_snap_point(self, mouse_pos: QPointF) -> Optional[QPointF]:
+        """Find the nearest snap point within snap distance."""
+        if not self.snap_enabled or not hasattr(self, 'controller') or not self.controller:
+            return None
+            
+        scene_pos = self.mapToScene(mouse_pos.toPoint())
+        nearest_point = None
+        min_distance = self.snap_distance
+        
+        # Check all measurement endpoints
+        for measurement in self.controller.measurement_manager.measurements.values():
+            if measurement.view_name != self.view_name:
+                continue
+                
+            # Only check measurements on current slice
+            current_slice = self.model.view_configs[self.view_name]['slice'] if self.model else 0
+            if measurement.slice_idx != current_slice:
+                continue
+            
+            # Get measurement endpoints in scene coordinates
+            axis = self.model.view_configs[self.view_name]['axis'] if self.model else 2
+            if axis == 0:  # Sagittal
+                p1_img = QPointF(measurement.start_voxel[1], measurement.start_voxel[2])
+                p2_img = QPointF(measurement.end_voxel[1], measurement.end_voxel[2])
+            elif axis == 1:  # Coronal
+                p1_img = QPointF(measurement.start_voxel[0], measurement.start_voxel[2])
+                p2_img = QPointF(measurement.end_voxel[0], measurement.end_voxel[2])
+            else:  # Axial
+                p1_img = QPointF(measurement.start_voxel[0], measurement.start_voxel[1])
+                p2_img = QPointF(measurement.end_voxel[0], measurement.end_voxel[1])
+            
+            # Apply Y-flip for scene coordinates
+            if hasattr(self.pixmap_item, 'pixmap') and not self.pixmap_item.pixmap().isNull():
+                h = self.pixmap_item.pixmap().height()
+                p1_scene = QPointF(p1_img.x(), h - 1 - p1_img.y())
+                p2_scene = QPointF(p2_img.x(), h - 1 - p2_img.y())
+                
+                # Calculate distances
+                dist1 = ((scene_pos.x() - p1_scene.x())**2 + (scene_pos.y() - p1_scene.y())**2)**0.5
+                dist2 = ((scene_pos.x() - p2_scene.x())**2 + (scene_pos.y() - p2_scene.y())**2)**0.5
+                
+                if dist1 < min_distance:
+                    min_distance = dist1
+                    nearest_point = p1_img  # Return in image coordinates
+                if dist2 < min_distance:
+                    min_distance = dist2
+                    nearest_point = p2_img  # Return in image coordinates
+                    
+        return nearest_point
+    
+    def _show_snap_preview(self, snap_point: QPointF):
+        """Show visual preview of snap point."""
+        self._clear_snap_preview()
+        
+        if hasattr(self.pixmap_item, 'pixmap') and not self.pixmap_item.pixmap().isNull():
+            # Convert to scene coordinates for drawing
+            h = self.pixmap_item.pixmap().height()
+            scene_point = QPointF(snap_point.x(), h - 1 - snap_point.y())
+            
+            # Create snap preview circle (radius matches snap distance)
+            radius = self.snap_distance // 2  # Half of snap distance
+            self._snap_preview_item = QGraphicsEllipseItem(
+                scene_point.x() - radius, scene_point.y() - radius, 
+                radius * 2, radius * 2
+            )
+            self._snap_preview_item.setPen(QPen(QColor(255, 255, 0, 200), 2))  # Yellow with transparency
+            self._snap_preview_item.setBrush(QBrush(QColor(255, 255, 0, 100)))  # Semi-transparent fill
+            self.scene.addItem(self._snap_preview_item)
+    
+    def _clear_snap_preview(self):
+        """Clear snap preview graphics."""
+        if self._snap_preview_item:
+            if self._snap_preview_item.scene():
+                self.scene.removeItem(self._snap_preview_item)
+            self._snap_preview_item = None
+
     def _highlight_measurements_under_cursor(self, view_pos: QPointF):
         """Highlight measurement graphics under cursor for eraser tool."""
         # Clear previous highlights
@@ -1315,6 +1418,10 @@ class SliceView(QGraphicsView):
                 if hasattr(item, 'setOpacity') and item.data(0):  # It's a measurement item
                     item.setOpacity(1.0)  # Reset to normal
             self.setCursor(Qt.ArrowCursor)
+        elif self.measure_mode == 'line':
+            # Clear snap preview when mouse leaves
+            self._clear_snap_preview()
+            self._current_snap_point = None
         super().leaveEvent(event)
 
     def reset_view(self) -> None:
@@ -1565,7 +1672,7 @@ class MainWindow(QMainWindow):
         style_settings_layout.addWidget(QLabel("Line Width:"), 0, 0)
         self.line_width_spinbox = QDoubleSpinBox()
         self.line_width_spinbox.setRange(0.1, 10.0) # 0.1 to 10.0 pixels
-        self.line_width_spinbox.setValue(2.0) # Default to 2.0 pixel
+        self.line_width_spinbox.setValue(1.5) # Default to 1.5 pixel (thinner)
         self.line_width_spinbox.setSingleStep(0.1) # Step by 0.1
         self.line_width_spinbox.setDecimals(1) # 1 decimal place
         style_settings_layout.addWidget(self.line_width_spinbox, 0, 1)
@@ -1581,7 +1688,7 @@ class MainWindow(QMainWindow):
         style_settings_layout.addWidget(QLabel("Font Size:"), 3, 0)
         self.font_size_spinbox = QDoubleSpinBox()
         self.font_size_spinbox.setRange(2.0, 24.0) # 2.0 to 24.0 pt
-        self.font_size_spinbox.setValue(6.0) # Default to 6.0 pt
+        self.font_size_spinbox.setValue(5.0) # Default to 5.0 pt (smaller)
         self.font_size_spinbox.setSingleStep(0.5) # Step by 0.5
         self.font_size_spinbox.setDecimals(1) # 1 decimal place
         style_settings_layout.addWidget(self.font_size_spinbox, 3, 1)
@@ -1593,6 +1700,24 @@ class MainWindow(QMainWindow):
         style_settings_layout.addWidget(self.font_weight_combo, 4, 1)
         
         settings_layout.addLayout(style_settings_layout)
+        
+        # Auto-snap settings
+        snap_settings_layout = QGridLayout()
+        snap_settings_layout.addWidget(QLabel("Auto-Snap:"), 0, 0)
+        self.snap_enabled_checkbox = QCheckBox("Enable endpoint snapping")
+        self.snap_enabled_checkbox.setChecked(True)  # Default enabled
+        snap_settings_layout.addWidget(self.snap_enabled_checkbox, 0, 1)
+        
+        snap_settings_layout.addWidget(QLabel("Snap Distance:"), 1, 0)
+        self.snap_distance_spinbox = QDoubleSpinBox()
+        self.snap_distance_spinbox.setRange(3.0, 20.0)  # 3 to 20 pixels (smaller range)
+        self.snap_distance_spinbox.setValue(6.0)  # Default 6 pixels (match circle size)
+        self.snap_distance_spinbox.setSingleStep(1.0)
+        self.snap_distance_spinbox.setDecimals(0)
+        self.snap_distance_spinbox.setSuffix(" px")
+        snap_settings_layout.addWidget(self.snap_distance_spinbox, 1, 1)
+        
+        settings_layout.addLayout(snap_settings_layout)
         
         # Apply buttons
         apply_buttons_layout = QHBoxLayout()
@@ -1869,6 +1994,10 @@ class ViewerController(QObject):
             slice_view.wheelScrolled.connect(partial(self._on_wheel_scroll, name))
             slice_view.mousePositionChanged.connect(partial(self._on_mouse_position, name))
             slice_view.lineMeasured.connect(partial(self._on_line_measured, name))
+            
+            # Initialize snap settings from UI
+            slice_view.snap_enabled = self.view.snap_enabled_checkbox.isChecked()
+            slice_view.snap_distance = self.view.snap_distance_spinbox.value()
 
     def setup_measurement_connections(self):
         """Connect measurement-related signals."""
@@ -1889,6 +2018,22 @@ class ViewerController(QObject):
         
         # Double-click to navigate to measurement
         self.view.measurements_list.itemDoubleClicked.connect(self.navigate_to_measurement)
+        
+        # Snap settings connections
+        self.view.snap_enabled_checkbox.stateChanged.connect(self.update_snap_settings)
+        self.view.snap_distance_spinbox.valueChanged.connect(self.update_snap_settings)
+    
+    def update_snap_settings(self):
+        """Update snap settings for all slice views."""
+        snap_enabled = self.view.snap_enabled_checkbox.isChecked()
+        snap_distance = self.view.snap_distance_spinbox.value()
+        
+        for slice_view in self.view.slice_views.values():
+            slice_view.snap_enabled = snap_enabled
+            slice_view.snap_distance = snap_distance
+            # Clear any existing snap preview when settings change
+            slice_view._clear_snap_preview()
+            slice_view._current_snap_point = None
     
     def toggle_line_tool(self, checked: bool):
         """Toggle the line measurement tool."""
@@ -2123,13 +2268,258 @@ class ViewerController(QObject):
         font.setPointSizeF(measurement.text_font_size)  # Support float font size
         font.setWeight(measurement.text_font_weight)
         text.setFont(font)
-        text.setPos((p1_draw.x() + p2_draw.x()) / 2, (p1_draw.y() + p2_draw.y()) / 2)
+        
+        # Use intelligent text positioning with collision avoidance
+        line_center = QPointF((p1_draw.x() + p2_draw.x()) / 2, (p1_draw.y() + p2_draw.y()) / 2)
+        text_pos = self._calculate_text_position(view, p1_draw, p2_draw, text)
+        text.setPos(text_pos)
         text.setData(0, measurement.id)
         text.setFlag(QGraphicsSimpleTextItem.ItemIsSelectable, True)
         view.scene.addItem(text)
         
-        # Track graphics items
-        self.measurement_manager.add_graphics_items(measurement.id, view_name, line, text)
+        # Add arrow only if text is significantly displaced from line center
+        arrow_item = None
+        distance_from_center = ((text_pos.x() - line_center.x()) ** 2 + 
+                               (text_pos.y() - line_center.y()) ** 2) ** 0.5
+        if distance_from_center > 8:  # Small threshold - since text is much closer now
+            arrow_item = self._create_arrow_annotation(text_pos, line_center, measurement)
+            view.scene.addItem(arrow_item)
+        
+        # Track graphics items (including optional arrow)
+        self.measurement_manager.add_graphics_items(measurement.id, view_name, line, text, arrow_item)
+        
+        # Trigger dynamic recalculation of all measurements in this view to avoid overlaps
+        self._recalculate_text_positions(view_name)
+    
+    def _calculate_text_position(self, view, p1: QPointF, p2: QPointF, text_item: QGraphicsSimpleTextItem) -> QPointF:
+        """Calculate optimal text position using 6 default positions strategy."""
+        line_center = QPointF((p1.x() + p2.x()) / 2, (p1.y() + p2.y()) / 2)
+        
+        # Add text item to scene temporarily to get proper bounding rect
+        temp_added = False
+        if text_item.scene() is None:
+            view.scene.addItem(text_item)
+            temp_added = True
+        
+        # Calculate line vector and perpendicular vector
+        line_vector = QPointF(p2.x() - p1.x(), p2.y() - p1.y())
+        line_length = (line_vector.x() ** 2 + line_vector.y() ** 2) ** 0.5
+        
+        if line_length > 0:
+            line_unit = QPointF(line_vector.x() / line_length, line_vector.y() / line_length)
+            # Perpendicular vector (rotate 90 degrees)
+            perp_unit = QPointF(-line_unit.y(), line_unit.x())
+        else:
+            line_unit = QPointF(1, 0)
+            perp_unit = QPointF(0, 1)
+        
+        # Get text dimensions
+        text_item.setPos(QPointF(0, 0))  # Reset position
+        text_bounds = text_item.boundingRect()
+        text_height = text_bounds.height()
+        
+        # Define 6 default positions: p1-left, p1-right, center-left, center-right, p2-left, p2-right  
+        # Use very close distance to line
+        offset = max(6, text_height // 2 + 3)  # Much closer to line
+        
+        candidates = [
+            # Priority 1: Center positions (most preferred)
+            QPointF(line_center.x() + perp_unit.x() * offset, line_center.y() + perp_unit.y() * offset),  # Center-right
+            QPointF(line_center.x() - perp_unit.x() * offset, line_center.y() - perp_unit.y() * offset),  # Center-left
+            
+            # Priority 2: Endpoint positions  
+            QPointF(p1.x() + perp_unit.x() * offset, p1.y() + perp_unit.y() * offset),  # P1-right
+            QPointF(p1.x() - perp_unit.x() * offset, p1.y() - perp_unit.y() * offset),  # P1-left
+            QPointF(p2.x() + perp_unit.x() * offset, p2.y() + perp_unit.y() * offset),  # P2-right
+            QPointF(p2.x() - perp_unit.x() * offset, p2.y() - perp_unit.y() * offset),  # P2-left
+            
+            # Priority 3: Fallback to original center (no offset)
+            line_center,
+        ]
+        
+        # Check each candidate for collisions
+        best_candidate = line_center  # Default fallback
+        for candidate in candidates:
+            # Temporarily position the text item to get its scene bounding rect
+            text_item.setPos(candidate)
+            scene_rect = text_item.sceneBoundingRect()
+            
+            if not self._has_collision(view, scene_rect, text_item, p1, p2):
+                best_candidate = candidate
+                break
+        
+        # Remove from scene if we temporarily added it
+        if temp_added:
+            view.scene.removeItem(text_item)
+            
+        return best_candidate
+    
+    def _has_collision(self, view, text_rect: QRectF, current_text: QGraphicsSimpleTextItem, line_p1: QPointF, line_p2: QPointF) -> bool:
+        """Check if text collides with other texts or with its own line."""
+        # Check collision with other texts
+        if self._has_text_collision(view, text_rect, current_text):
+            return True
+            
+        # Check collision with its own line
+        if self._intersects_line(text_rect, line_p1, line_p2):
+            return True
+            
+        return False
+    
+    def _intersects_line(self, rect: QRectF, p1: QPointF, p2: QPointF) -> bool:
+        """Check if a rectangle intersects with a line segment."""
+        # Expand rect slightly to avoid too-close positioning
+        margin = 4  # Reduced margin to allow closer text positioning
+        expanded_rect = rect.adjusted(-margin, -margin, margin, margin)
+        
+        # Check if either endpoint is inside the rectangle
+        if expanded_rect.contains(p1) or expanded_rect.contains(p2):
+            return True
+            
+        # Check if the line intersects any edge of the rectangle
+        # This is a simplified check - we could implement full line-rectangle intersection
+        # For now, check if the line passes through the rect's bounding area
+        rect_center = expanded_rect.center()
+        line_center = QPointF((p1.x() + p2.x()) / 2, (p1.y() + p2.y()) / 2)
+        
+        # If line center is very close to rect center, consider it an intersection
+        distance = ((rect_center.x() - line_center.x()) ** 2 + 
+                   (rect_center.y() - line_center.y()) ** 2) ** 0.5
+        
+        # Consider intersection if distance is less than half the diagonal of expanded rect
+        diagonal = ((expanded_rect.width()) ** 2 + (expanded_rect.height()) ** 2) ** 0.5
+        return distance < diagonal / 2
+    
+    def _has_text_collision(self, view, text_rect: QRectF, current_text: QGraphicsSimpleTextItem = None) -> bool:
+        """Check if a text rectangle collides with existing measurement texts."""
+        collision_margin = 6  # Reduced minimum spacing between texts
+        expanded_rect = text_rect.adjusted(-collision_margin, -collision_margin, 
+                                         collision_margin, collision_margin)
+        
+        # Get all text items in the scene that have measurement IDs
+        for item in view.scene.items():
+            if (isinstance(item, QGraphicsSimpleTextItem) and 
+                item != current_text and  # Exclude the current text item
+                item.data(0) is not None and  # Only check measurement texts (they have IDs)
+                item.sceneBoundingRect().intersects(expanded_rect)):
+                return True
+                
+        return False
+    
+    def _create_arrow_annotation(self, text_pos: QPointF, line_center: QPointF, measurement) -> QGraphicsPathItem:
+        """Create an arrow pointing from line center to text edge (indicating connection)."""
+        # Calculate arrow direction (from line center to text center)
+        arrow_vector = QPointF(text_pos.x() - line_center.x(), text_pos.y() - line_center.y())
+        arrow_length = (arrow_vector.x() ** 2 + arrow_vector.y() ** 2) ** 0.5
+        
+        if arrow_length == 0:
+            return None
+            
+        # Normalize arrow vector
+        arrow_unit = QPointF(arrow_vector.x() / arrow_length, arrow_vector.y() / arrow_length)
+        
+        # Calculate text bounds to find edge
+        # Approximate text dimensions (since we can't access the text item here)
+        text_width = measurement.length_mm * 4  # Rough approximation
+        text_height = measurement.text_font_size * 1.2  # Rough approximation
+        
+        # Shorten arrow to point to text edge, not center
+        line_margin = 3   # Distance from line center
+        text_margin = max(text_width, text_height) / 2 + 2  # Distance to text edge
+        shortened_length = max(arrow_length - line_margin - text_margin, 4)
+        
+        # Arrow start and end points (from line center towards text edge)
+        arrow_start = QPointF(line_center.x() + arrow_unit.x() * line_margin,
+                             line_center.y() + arrow_unit.y() * line_margin)
+        arrow_end = QPointF(arrow_start.x() + arrow_unit.x() * shortened_length,
+                           arrow_start.y() + arrow_unit.y() * shortened_length)
+        
+        # Create arrow path
+        arrow_path = QPainterPath()
+        arrow_path.moveTo(arrow_start)
+        arrow_path.lineTo(arrow_end)
+        
+        # Add arrowhead pointing towards the text (smaller size)
+        arrowhead_length = 6
+        arrowhead_width = 3
+        
+        # Calculate perpendicular vector for arrowhead
+        perp_vector = QPointF(-arrow_unit.y(), arrow_unit.x())
+        
+        # Arrowhead points - create triangular arrowhead
+        head_point1 = QPointF(arrow_end.x() - arrow_unit.x() * arrowhead_length + perp_vector.x() * arrowhead_width,
+                             arrow_end.y() - arrow_unit.y() * arrowhead_length + perp_vector.y() * arrowhead_width)
+        head_point2 = QPointF(arrow_end.x() - arrow_unit.x() * arrowhead_length - perp_vector.x() * arrowhead_width,
+                             arrow_end.y() - arrow_unit.y() * arrowhead_length - perp_vector.y() * arrowhead_width)
+        
+        # Create simple two-line arrowhead (not filled triangle)
+        arrow_path.lineTo(head_point1)
+        arrow_path.moveTo(arrow_end)
+        arrow_path.lineTo(head_point2)
+        
+        # Create graphics item
+        arrow_item = QGraphicsPathItem(arrow_path)
+        arrow_item.setPen(QPen(measurement.text_color, 1.5))
+        arrow_item.setData(0, measurement.id)  # Store measurement ID
+        arrow_item.setFlag(QGraphicsPathItem.ItemIsSelectable, True)
+        
+        return arrow_item
+    
+    def _recalculate_text_positions(self, view_name: str):
+        """Recalculate text positions for all measurements in a view to avoid overlaps."""
+        if view_name not in self.view.slice_views:
+            return
+            
+        view = self.view.slice_views[view_name]
+        current_slice = self.model.view_configs[view_name]['slice']
+        
+        # Get all measurements for this view and slice
+        measurements_to_update = []
+        for measurement in self.measurement_manager.measurements.values():
+            if (measurement.view_name == view_name and 
+                measurement.slice_idx == current_slice and
+                measurement.id in self.measurement_manager._graphics_items):
+                measurements_to_update.append(measurement)
+        
+        # Sort by creation order (older measurements get priority for better positions)
+        measurements_to_update.sort(key=lambda m: m.id)
+        
+        # Recalculate positions for each measurement
+        for i, measurement in enumerate(measurements_to_update):
+            # Skip the most recently added measurement (it's already positioned)
+            if i == len(measurements_to_update) - 1:
+                continue
+                
+            graphics_items = self.measurement_manager._graphics_items[measurement.id][view_name]
+            if len(graphics_items) >= 2:
+                line_item = graphics_items[0]
+                text_item = graphics_items[1]
+                arrow_item = graphics_items[2] if len(graphics_items) > 2 else None
+                
+                # Get line endpoints
+                line = line_item.line()
+                p1 = line.p1()
+                p2 = line.p2()
+                
+                # Remove old arrow if it exists
+                if arrow_item and arrow_item.scene():
+                    view.scene.removeItem(arrow_item)
+                
+                # Recalculate text position
+                line_center = QPointF((p1.x() + p2.x()) / 2, (p1.y() + p2.y()) / 2)
+                new_text_pos = self._calculate_text_position(view, p1, p2, text_item)
+                text_item.setPos(new_text_pos)
+                
+                # Create new arrow if needed (only for far displacements)
+                distance_from_center = ((new_text_pos.x() - line_center.x()) ** 2 + 
+                                       (new_text_pos.y() - line_center.y()) ** 2) ** 0.5
+                new_arrow_item = None
+                if distance_from_center > 8:
+                    new_arrow_item = self._create_arrow_annotation(new_text_pos, line_center, measurement)
+                    view.scene.addItem(new_arrow_item)
+                
+                # Update graphics items tracking
+                self.measurement_manager.add_graphics_items(measurement.id, view_name, line_item, text_item, new_arrow_item)
 
     def _on_measurement_settings_changed(self):
         """Redraw all measurements with new settings."""

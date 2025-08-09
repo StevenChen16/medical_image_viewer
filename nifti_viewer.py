@@ -1130,6 +1130,10 @@ class SliceView(QGraphicsView):
         self._snap_preview_item = None
         self._current_snap_point = None
         
+        # Hover highlight system
+        self._hover_highlight_enabled = True
+        self._currently_highlighted_measurement_id = None
+        
         # Graphics setup
         self.scene = QGraphicsScene()
         self.setScene(self.scene)
@@ -1260,6 +1264,10 @@ class SliceView(QGraphicsView):
             if self.pixmap_item.contains(item_pos):
                 x, y = int(item_pos.x()), int(item_pos.y())
                 self.mousePositionChanged.emit(x, y)
+            
+            # Handle measurement hover highlighting in normal mode
+            if self._hover_highlight_enabled:
+                self._handle_measurement_hover(event.position())
         
         super().mouseMoveEvent(event)
     
@@ -1427,7 +1435,91 @@ class SliceView(QGraphicsView):
             # Clear snap preview when mouse leaves
             self._clear_snap_preview()
             self._current_snap_point = None
+        else:
+            # Clear measurement hover highlights in normal mode
+            if self._hover_highlight_enabled:
+                self._clear_measurement_highlights()
         super().leaveEvent(event)
+    
+    def _handle_measurement_hover(self, view_pos: QPointF):
+        """Handle measurement hover highlighting in normal mode."""
+        # Get item under cursor
+        scene_pos = self.mapToScene(view_pos.toPoint())
+        items_under_cursor = self.scene.items(scene_pos)
+        
+        measurement_id = None
+        # Find measurement item under cursor
+        for item in items_under_cursor:
+            if item.data(0) and isinstance(item, (QGraphicsLineItem, QGraphicsSimpleTextItem, QGraphicsPathItem)):
+                measurement_id = item.data(0)
+                break
+        
+        # Update highlight if measurement changed
+        if measurement_id != self._currently_highlighted_measurement_id:
+            self._clear_measurement_highlights()
+            if measurement_id:
+                self._highlight_measurement_group(measurement_id)
+            self._currently_highlighted_measurement_id = measurement_id
+    
+    def _highlight_measurement_group(self, measurement_id: int):
+        """Highlight all graphics items belonging to a measurement (line + text + arrow)."""
+        if not hasattr(self, 'controller') or not self.controller:
+            return
+            
+        # Get all items for this measurement
+        measurement_items = []
+        for item in self.scene.items():
+            if (item.data(0) == measurement_id and 
+                isinstance(item, (QGraphicsLineItem, QGraphicsSimpleTextItem, QGraphicsPathItem))):
+                measurement_items.append(item)
+        
+        # Apply medical-grade highlight (outline effect, not transparency)
+        highlight_color = QColor(255, 255, 0)  # Bright yellow for high contrast
+        highlight_width = 2.0  # Bold outline
+        
+        for item in measurement_items:
+            if isinstance(item, QGraphicsLineItem):
+                # Highlight line with bright outline
+                current_pen = item.pen()
+                highlight_pen = QPen(highlight_color, current_pen.widthF() + highlight_width)
+                item.setPen(highlight_pen)
+            elif isinstance(item, QGraphicsSimpleTextItem):
+                # Highlight text with bright outline
+                item.setPen(QPen(highlight_color, highlight_width))
+            elif isinstance(item, QGraphicsPathItem):
+                # Highlight arrow with bright outline  
+                current_pen = item.pen()
+                highlight_pen = QPen(highlight_color, current_pen.widthF() + 1.0)
+                item.setPen(highlight_pen)
+    
+    def _clear_measurement_highlights(self):
+        """Clear all measurement highlights and restore original styles."""
+        if not hasattr(self, 'controller') or not self.controller:
+            return
+            
+        # Clear highlights for currently highlighted measurement
+        if self._currently_highlighted_measurement_id:
+            measurement = self.controller.measurement_manager.measurements.get(
+                self._currently_highlighted_measurement_id
+            )
+            if measurement:
+                # Restore original styles
+                for item in self.scene.items():
+                    if item.data(0) == self._currently_highlighted_measurement_id:
+                        if isinstance(item, QGraphicsLineItem):
+                            # Restore original line style
+                            original_pen = QPen(measurement.line_color, measurement.line_width)
+                            item.setPen(original_pen)
+                        elif isinstance(item, QGraphicsSimpleTextItem):
+                            # Clear text outline
+                            item.setPen(QPen(Qt.NoPen))
+                        elif isinstance(item, QGraphicsPathItem):
+                            # Restore elegant arrow style
+                            arrow_color = QColor(255, 255, 0)  # Bright yellow
+                            original_pen = QPen(arrow_color, 0.6)  # Elegant thin line
+                            item.setPen(original_pen)
+        
+        self._currently_highlighted_measurement_id = None
 
     def reset_view(self) -> None:
         """Reset zoom and pan to fit image."""
@@ -2333,26 +2425,33 @@ class ViewerController(QObject):
             ('center', line_center, 0.8),  # Center, lower priority
         ]
         
-        # Define offset directions with distances (去同质化)
-        offset_close = max(6, text_height * 0.6)    # Very close
-        offset_medium = max(10, text_height * 0.8)  # Medium distance
-        offset_far = max(15, text_height * 1.2)     # Far distance
+        # Define offset directions with distances (极端防重叠策略)
+        offset_close = max(10, text_height * 0.8)     # Close (increased again)
+        offset_medium = max(20, text_height * 1.2)    # Medium distance (increased)
+        offset_far = max(35, text_height * 1.8)       # Far distance (increased)
+        offset_very_far = max(50, text_height * 2.5)  # Very far distance (increased)
+        offset_extreme = max(70, text_height * 3.5)   # Extreme distance for dense areas (new)
         
-        # Generate diverse candidates (法向 + 斜向)
+        # Generate diverse candidates (法向 + 斜向 + 纯方向)
         directions = [
-            (perp_unit.x(), perp_unit.y(), 'right'),           # Right
-            (-perp_unit.x(), -perp_unit.y(), 'left'),          # Left  
+            (perp_unit.x(), perp_unit.y(), 'right'),           # Right perpendicular
+            (-perp_unit.x(), -perp_unit.y(), 'left'),          # Left perpendicular
             # 斜向去同质化
             (0.7*perp_unit.x() + 0.3*line_unit.x(), 0.7*perp_unit.y() + 0.3*line_unit.y(), 'right_forward'),
             (0.7*perp_unit.x() - 0.3*line_unit.x(), 0.7*perp_unit.y() - 0.3*line_unit.y(), 'right_back'),
             (-0.7*perp_unit.x() + 0.3*line_unit.x(), -0.7*perp_unit.y() + 0.3*line_unit.y(), 'left_forward'),
             (-0.7*perp_unit.x() - 0.3*line_unit.x(), -0.7*perp_unit.y() - 0.3*line_unit.y(), 'left_back'),
+            # 纯方向候选位置 (更好的分散性)
+            (1.0, 0.0, 'pure_right'),    # Pure horizontal right
+            (-1.0, 0.0, 'pure_left'),    # Pure horizontal left
+            (0.0, 1.0, 'pure_down'),     # Pure vertical down
+            (0.0, -1.0, 'pure_up'),      # Pure vertical up
         ]
         
-        # Generate all candidates with priorities
+        # Generate all candidates with priorities (极端防重叠优先级系统)
         candidates = []
         for anchor_name, anchor_pos, anchor_priority in anchor_points:
-            for distance, dist_priority in [(offset_close, 3.0), (offset_medium, 2.0), (offset_far, 1.0)]:
+            for distance, dist_priority in [(offset_close, 5.0), (offset_medium, 4.0), (offset_far, 3.0), (offset_very_far, 2.0), (offset_extreme, 1.0)]:
                 for dx, dy, dir_name in directions:
                     pos = QPointF(anchor_pos.x() + dx * distance, anchor_pos.y() + dy * distance)
                     
@@ -2409,9 +2508,9 @@ class ViewerController(QObject):
         # Create text rect at position
         text_rect = QRectF(pos.x(), pos.y(), text_width, text_height)
         
-        # Dynamic margin based on font size
+        # Ultra-strong margin for dense measurement areas (zero-tolerance overlap)
         font_height = text_height
-        collision_margin = max(6, font_height * 0.4)
+        collision_margin = max(16, font_height * 0.8)  # Further increased from 12 to 16, and 0.6 to 0.8
         expanded_rect = text_rect.adjusted(-collision_margin, -collision_margin, 
                                          collision_margin, collision_margin)
         
@@ -2497,7 +2596,7 @@ class ViewerController(QObject):
     
     def _has_text_collision(self, view, text_rect: QRectF, current_text: QGraphicsSimpleTextItem = None) -> bool:
         """Check if a text rectangle collides with existing measurement texts."""
-        collision_margin = 8  # Increased minimum spacing to prevent overlap
+        collision_margin = 16  # Ultra-strong minimum spacing for dense areas (zero-tolerance)
         expanded_rect = text_rect.adjusted(-collision_margin, -collision_margin, 
                                          collision_margin, collision_margin)
         
@@ -2512,7 +2611,7 @@ class ViewerController(QObject):
         return False
     
     def _create_arrow_annotation(self, text_pos: QPointF, line_center: QPointF, measurement) -> QGraphicsPathItem:
-        """Create an arrow pointing from line center to text edge (indicating connection)."""
+        """Create a prominent arrow pointing from line center to text edge (medical grade visibility)."""
         # Calculate arrow direction (from line center to text center)
         arrow_vector = QPointF(text_pos.x() - line_center.x(), text_pos.y() - line_center.y())
         arrow_length = (arrow_vector.x() ** 2 + arrow_vector.y() ** 2) ** 0.5
@@ -2523,15 +2622,14 @@ class ViewerController(QObject):
         # Normalize arrow vector
         arrow_unit = QPointF(arrow_vector.x() / arrow_length, arrow_vector.y() / arrow_length)
         
-        # Calculate text bounds to find edge
-        # Approximate text dimensions (since we can't access the text item here)
-        text_width = measurement.length_mm * 4  # Rough approximation
-        text_height = measurement.text_font_size * 1.2  # Rough approximation
+        # Calculate text bounds to find edge (more accurate estimation)
+        text_width = len(f"{measurement.length_mm:.2f} mm") * measurement.text_font_size * 0.6
+        text_height = measurement.text_font_size * 1.2
         
-        # Shorten arrow to point to text edge, not center
-        line_margin = 3   # Distance from line center
-        text_margin = max(text_width, text_height) / 2 + 2  # Distance to text edge
-        shortened_length = max(arrow_length - line_margin - text_margin, 4)
+        # Optimized margins for better visibility and connection
+        line_margin = 5   # Slightly increased distance from line center
+        text_margin = min(text_width, text_height) / 2 + 3  # Reduced margin, closer to text
+        shortened_length = max(arrow_length - line_margin - text_margin, 8)  # Minimum 8px arrow
         
         # Arrow start and end points (from line center towards text edge)
         arrow_start = QPointF(line_center.x() + arrow_unit.x() * line_margin,
@@ -2544,27 +2642,29 @@ class ViewerController(QObject):
         arrow_path.moveTo(arrow_start)
         arrow_path.lineTo(arrow_end)
         
-        # Add arrowhead pointing towards the text (smaller size)
-        arrowhead_length = 6
-        arrowhead_width = 3
+        # Refined arrowhead for medical elegance
+        arrowhead_length = 6   # Restored to elegant size
+        arrowhead_width = 3    # Restored to elegant size
         
         # Calculate perpendicular vector for arrowhead
         perp_vector = QPointF(-arrow_unit.y(), arrow_unit.x())
         
-        # Arrowhead points - create triangular arrowhead
+        # Arrowhead points - create prominent triangular arrowhead
         head_point1 = QPointF(arrow_end.x() - arrow_unit.x() * arrowhead_length + perp_vector.x() * arrowhead_width,
                              arrow_end.y() - arrow_unit.y() * arrowhead_length + perp_vector.y() * arrowhead_width)
         head_point2 = QPointF(arrow_end.x() - arrow_unit.x() * arrowhead_length - perp_vector.x() * arrowhead_width,
                              arrow_end.y() - arrow_unit.y() * arrowhead_length - perp_vector.y() * arrowhead_width)
         
-        # Create simple two-line arrowhead (not filled triangle)
+        # Create prominent two-line arrowhead
         arrow_path.lineTo(head_point1)
         arrow_path.moveTo(arrow_end)
         arrow_path.lineTo(head_point2)
         
-        # Create graphics item
+        # Create graphics item with refined elegance
         arrow_item = QGraphicsPathItem(arrow_path)
-        arrow_item.setPen(QPen(measurement.text_color, 1.5))
+        # Use bright contrasting color but elegant thin line
+        arrow_color = QColor(255, 255, 0)  # Bright yellow for maximum contrast
+        arrow_item.setPen(QPen(arrow_color, 0.6))  # Elegant thin line as requested
         arrow_item.setData(0, measurement.id)  # Store measurement ID
         arrow_item.setFlag(QGraphicsPathItem.ItemIsSelectable, True)
         
@@ -2606,14 +2706,14 @@ class ViewerController(QObject):
                         text2 = graphics2[1] 
                         rect2 = text2.sceneBoundingRect()
                         
-                        # Check if texts overlap (with margin)
-                        margin = 8
+                        # Check if texts overlap (with ultra-strong margin)
+                        margin = 16
                         expanded_rect1 = rect1.adjusted(-margin, -margin, margin, margin)
                         if expanded_rect1.intersects(rect2):
                             conflicting_measurements.add(measurement1.id)
                             conflicting_measurements.add(measurement2.id)
         
-        # Step 2: Build occupied_rects from non-conflicting measurements (position reservation)
+        # Step 2: Build enhanced occupied_rects from non-conflicting measurements (comprehensive reservation)
         occupied_rects = []
         for measurement in measurements:
             if measurement.id not in conflicting_measurements:
@@ -2622,9 +2722,20 @@ class ViewerController(QObject):
                 if len(graphics) >= 2:
                     text_item = graphics[1]
                     text_rect = text_item.sceneBoundingRect()
-                    margin = 8  # Same as collision detection margin
-                    reserved_rect = text_rect.adjusted(-margin, -margin, margin, margin)
+                    
+                    # Enhanced adaptive margin based on font size and density
+                    font_size = measurement.text_font_size if hasattr(measurement, 'text_font_size') else 12
+                    adaptive_margin = max(16, font_size * 1.2)  # Adaptive to font size
+                    
+                    reserved_rect = text_rect.adjusted(-adaptive_margin, -adaptive_margin, 
+                                                     adaptive_margin, adaptive_margin)
                     occupied_rects.append(reserved_rect)
+                    
+                    # Also reserve space around arrows if they exist
+                    if len(graphics) >= 3 and graphics[2]:  # Arrow exists
+                        arrow_rect = graphics[2].sceneBoundingRect()
+                        arrow_reserved = arrow_rect.adjusted(-8, -8, 8, 8)  # Smaller margin for arrows
+                        occupied_rects.append(arrow_reserved)
         
         # Step 3: Recalculate positions for conflicting measurements with priority ordering
         # Sort conflicting measurements: locked first, then by age (older first)

@@ -37,11 +37,12 @@ from PySide6.QtWidgets import (
     QSlider, QLabel, QCheckBox, QPushButton, QMenuBar, QStatusBar,
     QDockWidget, QGroupBox, QGridLayout, QSpinBox, QDoubleSpinBox,
     QFileDialog, QMessageBox, QProgressBar, QToolTip, QFrame, QLineEdit,
-    QDialog, QTabWidget, QTextEdit, QScrollArea, QSizePolicy, QColorDialog, QListWidget, QGraphicsLineItem, QGraphicsSimpleTextItem
+    QDialog, QTabWidget, QTextEdit, QScrollArea, QSizePolicy, QColorDialog, 
+    QListWidget, QGraphicsLineItem, QGraphicsSimpleTextItem, QMenu, QComboBox, QGraphicsEllipseItem
 )
 from PySide6.QtCore import (
     Qt, QObject, Signal, QThread, QRunnable, QThreadPool, QTimer,
-    QRect, QSize, QPointF
+    QRect, QSize, QPointF, QPoint
 )
 from PySide6.QtGui import (
     QPixmap, QPainter, QImage, QPen, QBrush, QColor, QTransform,
@@ -627,19 +628,42 @@ import dataclasses
 import time
 import csv
 
-@dataclasses.dataclass
 class Measurement:
     """Data class for a single measurement."""
-    id: int
-    type: str  # 'line', 'angle', 'roi'
-    view_name: str
-    slice_idx: int
-    start_voxel: Tuple[int, int, int]
-    end_voxel: Tuple[int, int, int]
-    start_world: Tuple[float, float, float]
-    end_world: Tuple[float, float, float]
-    length_mm: float
-    timestamp: float
+    def __init__(self, id: int, type: str, view_name: str, slice_idx: int,
+                 start_voxel: Tuple[int, int, int], end_voxel: Tuple[int, int, int],
+                 start_world: Tuple[float, float, float], end_world: Tuple[float, float, float],
+                 length_mm: float, timestamp: float):
+        self.id = id
+        self.type = type  # 'line', 'angle', 'roi'
+        self.view_name = view_name
+        self.slice_idx = slice_idx
+        self.start_voxel = start_voxel
+        self.end_voxel = end_voxel
+        self.start_world = start_world
+        self.end_world = end_world
+        self.length_mm = length_mm
+        self.timestamp = timestamp
+        
+        # Style properties
+        self.line_color = QColor(255, 0, 0)  # Default red
+        self.line_width = 2.0  # Support float values
+        self.text_color = QColor(255, 0, 0)  # Default red
+        self.text_font_size = 6.0  # Support float values  
+        self.text_font_weight = QFont.Normal
+    
+    def apply_style(self, line_color=None, line_width=None, text_color=None, text_font_size=None, text_font_weight=None):
+        """Apply style properties to this measurement."""
+        if line_color is not None:
+            self.line_color = line_color
+        if line_width is not None:
+            self.line_width = line_width
+        if text_color is not None:
+            self.text_color = text_color
+        if text_font_size is not None:
+            self.text_font_size = text_font_size
+        if text_font_weight is not None:
+            self.text_font_weight = text_font_weight
 
 class MeasurementManager(QObject):
     """Manages all measurement data and related graphics items."""
@@ -652,6 +676,9 @@ class MeasurementManager(QObject):
         self.model = model
         self.measurements: Dict[int, Measurement] = {}
         self._next_id = 1
+        
+        # Graphics items tracking: measurement_id -> {view_name: [line_item, text_item]}
+        self._graphics_items: Dict[int, Dict[str, list]] = {}
 
         # Measurement display settings
         self.line_width = 1
@@ -703,11 +730,62 @@ class MeasurementManager(QObject):
         else:  # Axial
             return (int(x), int(y), slice_idx)
 
+    def add_graphics_items(self, measurement_id: int, view_name: str, line_item, text_item):
+        """Track graphics items for a measurement."""
+        if measurement_id not in self._graphics_items:
+            self._graphics_items[measurement_id] = {}
+        if view_name not in self._graphics_items[measurement_id]:
+            self._graphics_items[measurement_id][view_name] = []
+        self._graphics_items[measurement_id][view_name] = [line_item, text_item]
+    
+    def remove_graphics_items(self, measurement_id: int, view_name: str = None):
+        """Remove graphics items for a measurement from specified view or all views."""
+        if measurement_id not in self._graphics_items:
+            return
+            
+        if view_name:
+            # Remove from specific view
+            if view_name in self._graphics_items[measurement_id]:
+                items = self._graphics_items[measurement_id][view_name]
+                for item in items:
+                    if item and hasattr(item, 'scene') and item.scene():
+                        item.scene().removeItem(item)
+                del self._graphics_items[measurement_id][view_name]
+        else:
+            # Remove from all views
+            for view_items in self._graphics_items[measurement_id].values():
+                for item in view_items:
+                    if item and hasattr(item, 'scene') and item.scene():
+                        item.scene().removeItem(item)
+            del self._graphics_items[measurement_id]
+
     def remove_measurement(self, measurement_id: int):
         """Remove a measurement by its ID."""
         if measurement_id in self.measurements:
+            # Remove graphics first
+            self.remove_graphics_items(measurement_id)
+            # Remove data
             del self.measurements[measurement_id]
             self.measurementRemoved.emit(measurement_id)
+
+    
+    def refresh_measurement_display(self, controller):
+        """Refresh measurement display in all views via controller."""
+        for view_name in ['axial', 'sagittal', 'coronal']:
+            current_slice = self.model.view_configs[view_name]['slice']
+            self.update_measurement_display(view_name, current_slice, controller)
+    
+    def update_measurement_display(self, view_name: str, slice_idx: int, controller=None):
+        """Update measurement display for a specific view and slice."""
+        # Remove all measurements from this view first
+        for measurement_id in list(self._graphics_items.keys()):
+            self.remove_graphics_items(measurement_id, view_name)
+        
+        # Add measurements that belong to this slice
+        if controller:
+            for measurement in self.measurements.values():
+                if measurement.view_name == view_name and measurement.slice_idx == slice_idx:
+                    controller._create_measurement_graphics(measurement, view_name)
 
     def export_csv(self, filepath: str):
         """Export all measurements to a CSV file."""
@@ -750,6 +828,19 @@ class MeasurementManager(QObject):
         if self.font_size != size:
             self.font_size = size
             self.settingsChanged.emit()
+    
+    def apply_style_to_measurements(self, measurement_ids: list, **style_kwargs):
+        """Apply style to specific measurements and refresh their display."""
+        for measurement_id in measurement_ids:
+            if measurement_id in self.measurements:
+                self.measurements[measurement_id].apply_style(**style_kwargs)
+        self.settingsChanged.emit()
+        
+    def apply_style_to_all_measurements(self, **style_kwargs):
+        """Apply style to all measurements and refresh display."""
+        for measurement in self.measurements.values():
+            measurement.apply_style(**style_kwargs)
+        self.settingsChanged.emit()
 
 
 # ============================================================================ 
@@ -896,39 +987,39 @@ class AboutDialog(QDialog):
         description.setReadOnly(True)
         description.setMaximumHeight(300)
         description.setHtml("""
-        <h3 style=\"color: #4a90e2;\">What is this Viewer?</h3>
+        <h3 style="color: #4a90e2;">What is this Viewer?</h3>
         <p>A simple, fast viewer for medical images. View MRI scans, overlays, and segmentation masks 
         in three perspectives simultaneously.</p>
         
-        <h3 style=\"color: #4a90e2;\">How to Use</h3>
+        <h3 style="color: #4a90e2;">How to Use</h3>
         <ul>
             <li><b>Load Files:</b> Use File menu → Load Image/Labels, or type paths in the right panel</li>
             <li><b>Navigate:</b> Mouse wheel scrolls through slices, Ctrl+wheel zooms in/out</li>
             <li><b>Pan & Rotate:</b> Right-click drag to move view, click rotation buttons to flip</li>
-            <li><b>Overlays:</b> Check \"Show Overlay\" and adjust transparency slider</li>
+            <li><b>Overlays:</b> Check "Show Overlay" and adjust transparency slider</li>
             <li><b>Save:</b> File → Save Screenshot (Ctrl+S) or Volume (Ctrl+Shift+S)</li>
         </ul>
         
-        <h3 style=\"color: #4a90e2;\">Keyboard Shortcuts</h3>
-        <table style=\"width: 100%; border-collapse: collapse;">
-            <tr><td style=\"padding: 4px;\"><b>Ctrl+O</b></td><td style=\"padding: 4px;\">Open image file</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>Ctrl+L</b></td><td style=\"padding: 4px;\">Open label file</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>Ctrl+S</b></td><td style=\"padding: 4px;\">Save screenshot</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>Ctrl+Shift+S</b></td><td style=\"padding: 4px;\">Open volume save menu</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>Ctrl+R</b></td><td style=\"padding: 4px;\">Reset views and clear cache</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>Ctrl+T</b></td><td style=\"padding: 4px;\">Toggle control panel</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>F</b></td><td style=\"padding: 4px;\">Fit all views to window</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>F1</b></td><td style=\"padding: 4px;\">Show this dialog</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>Wheel</b></td><td style=\"padding: 4px;\">Scroll through slices</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>Ctrl+Wheel</b></td><td style=\"padding: 4px;\">Zoom in/out</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>Right-drag</b></td><td style=\"padding: 4px;\">Pan view</td></tr>
+        <h3 style="color: #4a90e2;">Keyboard Shortcuts</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr><td style="padding: 4px;"><b>Ctrl+O</b></td><td style="padding: 4px;">Open image file</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+L</b></td><td style="padding: 4px;">Open label file</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+S</b></td><td style="padding: 4px;">Save screenshot</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+Shift+S</b></td><td style="padding: 4px;">Open volume save menu</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+R</b></td><td style="padding: 4px;">Reset views and clear cache</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+T</b></td><td style="padding: 4px;">Toggle control panel</td></tr>
+            <tr><td style="padding: 4px;"><b>F</b></td><td style="padding: 4px;">Fit all views to window</td></tr>
+            <tr><td style="padding: 4px;"><b>F1</b></td><td style="padding: 4px;">Show this dialog</td></tr>
+            <tr><td style="padding: 4px;"><b>Wheel</b></td><td style="padding: 4px;">Scroll through slices</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+Wheel</b></td><td style="padding: 4px;">Zoom in/out</td></tr>
+            <tr><td style="padding: 4px;"><b>Right-drag</b></td><td style="padding: 4px;">Pan view</td></tr>
         </table>
         
-        <h3 style=\"color: #4a90e2;\">Command Line Options</h3>
+        <h3 style="color: #4a90e2;">Command Line Options</h3>
         <p>Run <code>python nifti_viewer.py --help</code> for full options.<br>
         Examples: <code>-i image.mha -l labels.nii.gz</code></p>
         
-        <h3 style=\"color: #4a90e2;\">File Support</h3>
+        <h3 style="color: #4a90e2;">File Support</h3>
         <p>Supports NIfTI (.nii, .nii.gz) and MetaImage (.mha, .mhd) formats.</p>
         """)
         layout.addWidget(description)
@@ -962,11 +1053,11 @@ class AboutDialog(QDialog):
         description.setReadOnly(True)
         description.setMaximumHeight(300)
         description.setHtml("""
-        <h3 style=\"color: #4a90e2;\">什么是医学影像查看器？</h3>
+        <h3 style="color: #4a90e2;">什么是医学影像查看器？</h3>
         <p>简单快速的医学影像查看工具。支持查看磁共振(MRI)扫描图像、叠加图层和分割掩膜，
         同时显示三个角度的切面视图。</p>
         
-        <h3 style=\"color: #4a90e2;\">如何使用</h3>
+        <h3 style="color: #4a90e2;">如何使用</h3>
         <ul>
             <li><b>加载文件：</b>使用文件菜单 → 加载影像/标签，或在右侧面板输入文件路径</li>
             <li><b>导航操作：</b>鼠标滚轮切换切片，Ctrl+滚轮缩放视图</li>
@@ -975,26 +1066,26 @@ class AboutDialog(QDialog):
             <li><b>保存：</b>文件 → 保存截图 (Ctrl+S) 或保存体数据 (Ctrl+Shift+S)</li>
         </ul>
         
-        <h3 style=\"color: #4a90e2;\">快捷键一览</h3>
-        <table style=\"width: 100%; border-collapse: collapse;">
-            <tr><td style=\"padding: 4px;\"><b>Ctrl+O</b></td><td style=\"padding: 4px;\">打开影像文件</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>Ctrl+L</b></td><td style=\"padding: 4px;\">打开标签文件</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>Ctrl+S</b></td><td style=\"padding: 4px;\">保存截图</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>Ctrl+Shift+S</b></td><td style=\"padding: 4px;\">打开体数据保存菜单</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>Ctrl+R</b></td><td style=\"padding: 4px;\">重置视图并清空缓存</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>Ctrl+T</b></td><td style=\"padding: 4px;\">切换控制面板显示</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>F</b></td><td style=\"padding: 4px;\">适应所有视图到窗口</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>F1</b></td><td style=\"padding: 4px;\">显示此对话框</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>滚轮</b></td><td style=\"padding: 4px;\">切换切片</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>Ctrl+滚轮</b></td><td style=\"padding: 4px;\">缩放视图</td></tr>
-            <tr><td style=\"padding: 4px;\"><b>右键拖拽</b></td><td style=\"padding: 4px;\">平移视图</td></tr>
+        <h3 style="color: #4a90e2;">快捷键一览</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr><td style="padding: 4px;"><b>Ctrl+O</b></td><td style="padding: 4px;">打开影像文件</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+L</b></td><td style="padding: 4px;">打开标签文件</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+S</b></td><td style="padding: 4px;">保存截图</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+Shift+S</b></td><td style="padding: 4px;">打开体数据保存菜单</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+R</b></td><td style="padding: 4px;">重置视图并清空缓存</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+T</b></td><td style="padding: 4px;">切换控制面板显示</td></tr>
+            <tr><td style="padding: 4px;"><b>F</b></td><td style="padding: 4px;">适应所有视图到窗口</td></tr>
+            <tr><td style="padding: 4px;"><b>F1</b></td><td style="padding: 4px;">显示此对话框</td></tr>
+            <tr><td style="padding: 4px;"><b>滚轮</b></td><td style="padding: 4px;">切换切片</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+滚轮</b></td><td style="padding: 4px;">缩放视图</td></tr>
+            <tr><td style="padding: 4px;"><b>右键拖拽</b></td><td style="padding: 4px;">平移视图</td></tr>
         </table>
         
-        <h3 style=\"color: #4a90e2;\">命令行选项</h3>
+        <h3 style="color: #4a90e2;">命令行选项</h3>
         <p>运行 <code>python nifti_viewer.py --help</code> 查看完整选项。<br>
         示例：<code>-i image.mha -l labels.nii.gz</code></p>
         
-        <h3 style=\"color: #4a90e2;\">文件支持</h3>
+        <h3 style="color: #4a90e2;">文件支持</h3>
         <p>支持 NIfTI (.nii, .nii.gz) 和 MetaImage (.mha, .mhd) 格式。</p>
         """)
         layout.addWidget(description)
@@ -1019,9 +1110,15 @@ class SliceView(QGraphicsView):
         
         self.view_name = view_name
         self.model: Optional[ImageModel] = None
-        self.measure_mode = 'off'  # 'off', 'line'
+        self.measure_mode = 'off'  # 'off', 'line', 'erase'
         self._measure_points = []
         self._measure_temp_item = None
+        
+        # Snap system properties
+        self.snap_enabled = True
+        self.snap_distance = 10  # pixels
+        self._snap_preview_item = None
+        self._current_snap_point = None
         
         # Graphics setup
         self.scene = QGraphicsScene()
@@ -1102,11 +1199,14 @@ class SliceView(QGraphicsView):
             line.setPen(QPen(QColor(255, 255, 0), 2))
             self.scene.addItem(line)
             self._measure_temp_item = line
+        elif event.button() == Qt.LeftButton and self.measure_mode == 'erase':
+            # Delete measurement under cursor
+            self._delete_measurement_under_cursor(event.position())
         else:
             super().mousePressEvent(event)
     
     def mouseMoveEvent(self, event: QMouseEvent):
-        """Handle mouse movement for panning and tooltips."""
+        """Handle mouse movement for panning, tooltips, and eraser highlighting."""
         if self._panning:
             # Pan the view
             delta = event.position() - self._pan_start
@@ -1115,6 +1215,9 @@ class SliceView(QGraphicsView):
             self.verticalScrollBar().setValue(
                 self.verticalScrollBar().value() - int(delta.y()))
             self._pan_start = event.position()
+        elif self.measure_mode == 'erase':
+            # Highlight measurement items under cursor
+            self._highlight_measurements_under_cursor(event.position())
         elif self.measure_mode == 'line' and self._measure_temp_item:
             p2_img = self.map_view_to_image_coords(event.position())
             
@@ -1169,6 +1272,51 @@ class SliceView(QGraphicsView):
 
         return final_pos
     
+    def _highlight_measurements_under_cursor(self, view_pos: QPointF):
+        """Highlight measurement graphics under cursor for eraser tool."""
+        # Clear previous highlights
+        for item in self.scene.items():
+            if hasattr(item, 'setOpacity') and item.data(0):  # It's a measurement item
+                item.setOpacity(1.0)  # Reset to normal
+        
+        # Find items under cursor
+        scene_pos = self.mapToScene(view_pos.toPoint())
+        items_under_cursor = self.scene.items(scene_pos, Qt.IntersectsItemShape, Qt.DescendingOrder)
+        
+        # Highlight measurement items
+        for item in items_under_cursor:
+            if item.data(0):  # It's a measurement item with measurement ID
+                item.setOpacity(0.5)  # Highlight by reducing opacity
+                self.setCursor(Qt.PointingHandCursor)
+                return
+                
+        # No measurement under cursor
+        self.setCursor(Qt.ArrowCursor)
+    
+    def _delete_measurement_under_cursor(self, view_pos: QPointF):
+        """Delete measurement graphics under cursor."""
+        scene_pos = self.mapToScene(view_pos.toPoint())
+        items_under_cursor = self.scene.items(scene_pos, Qt.IntersectsItemShape, Qt.DescendingOrder)
+        
+        # Find measurement item and delete
+        for item in items_under_cursor:
+            measurement_id = item.data(0)
+            if measurement_id:  # It's a measurement item
+                # Emit signal to controller to delete the measurement
+                if hasattr(self, 'controller') and self.controller:
+                    self.controller.measurement_manager.remove_measurement(measurement_id)
+                break
+
+    def leaveEvent(self, event):
+        """Clear highlights when mouse leaves the view."""
+        if self.measure_mode == 'erase':
+            # Clear all highlights and reset cursor
+            for item in self.scene.items():
+                if hasattr(item, 'setOpacity') and item.data(0):  # It's a measurement item
+                    item.setOpacity(1.0)  # Reset to normal
+            self.setCursor(Qt.ArrowCursor)
+        super().leaveEvent(event)
+
     def reset_view(self) -> None:
         """Reset zoom and pan to fit image."""
         self.resetTransform()
@@ -1374,42 +1522,92 @@ class MainWindow(QMainWindow):
 
         # Measurement controls
         measure_layout = QVBoxLayout()
+        
+        # Tool buttons in horizontal layout
+        tool_buttons_layout = QHBoxLayout()
         self.line_tool_btn = QPushButton("Line Tool")
         self.line_tool_btn.setCheckable(True)
-        self.export_measurements_btn = QPushButton("Export CSV")
-        self.measurements_list = QListWidget()
-        measure_layout.addWidget(self.line_tool_btn)
-        measure_layout.addWidget(self.export_measurements_btn)
-        measure_layout.addWidget(self.measurements_list)
-
-        # Measurement Settings
-        settings_layout = QGridLayout()
-        settings_layout.addWidget(QLabel("Line Width:"), 0, 0)
-        self.line_width_spinbox = QSpinBox()
-        self.line_width_spinbox.setRange(1, 10) # 1 to 10 pixels
-        self.line_width_spinbox.setValue(1) # Default to 1 pixel
-        settings_layout.addWidget(self.line_width_spinbox, 0, 1)
-
-        settings_layout.addWidget(QLabel("Line Color:"), 1, 0)
-        self.line_color_btn = ColorButton(color=(255, 0, 0)) # Default red
-        settings_layout.addWidget(self.line_color_btn, 1, 1)
-
-        settings_layout.addWidget(QLabel("Text Color:"), 2, 0)
-        self.text_color_btn = ColorButton(color=(255, 0, 0)) # Default red
-        settings_layout.addWidget(self.text_color_btn, 2, 1)
-
-        settings_layout.addWidget(QLabel("Font Size:"), 3, 0)
-        self.font_size_spinbox = QSpinBox()
-        self.font_size_spinbox.setRange(6, 24) # 6 to 24 pt
-        self.font_size_spinbox.setValue(6) # Default to 6 pt
-        settings_layout.addWidget(self.font_size_spinbox, 3, 1)
-
-        settings_group = create_collapsible_group("Measurement Settings", settings_layout)
-        settings_group.setChecked(False) # Start collapsed
-        dock_layout.addWidget(settings_group)
+        self.eraser_tool_btn = QPushButton("Eraser")
+        self.eraser_tool_btn.setCheckable(True)
+        tool_buttons_layout.addWidget(self.line_tool_btn)
+        tool_buttons_layout.addWidget(self.eraser_tool_btn)
+        measure_layout.addLayout(tool_buttons_layout)
         
+        self.export_measurements_btn = QPushButton("Export CSV")
+        measure_layout.addWidget(self.export_measurements_btn)
+
+        # Measurement Settings with Enhanced UI
+        settings_layout = QVBoxLayout()
+        
+        # Measurement list with checkboxes for batch operations
+        list_container_layout = QVBoxLayout()
+        list_container_layout.addWidget(QLabel("Measurements:"))
+        self.measurements_list = QListWidget()
+        self.measurements_list.setSelectionMode(QListWidget.MultiSelection)
+        self.measurements_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        list_container_layout.addWidget(self.measurements_list)
+        
+        # Batch operation buttons
+        batch_buttons_layout = QHBoxLayout()
+        self.select_all_btn = QPushButton("Select All")
+        self.select_all_btn.setMaximumWidth(80)
+        self.deselect_all_btn = QPushButton("Deselect All") 
+        self.deselect_all_btn.setMaximumWidth(90)
+        batch_buttons_layout.addWidget(self.select_all_btn)
+        batch_buttons_layout.addWidget(self.deselect_all_btn)
+        batch_buttons_layout.addStretch()
+        list_container_layout.addLayout(batch_buttons_layout)
+        
+        settings_layout.addLayout(list_container_layout)
+        
+        # Style settings for selected measurements
+        style_settings_layout = QGridLayout()
+        style_settings_layout.addWidget(QLabel("Line Width:"), 0, 0)
+        self.line_width_spinbox = QDoubleSpinBox()
+        self.line_width_spinbox.setRange(0.1, 10.0) # 0.1 to 10.0 pixels
+        self.line_width_spinbox.setValue(2.0) # Default to 2.0 pixel
+        self.line_width_spinbox.setSingleStep(0.1) # Step by 0.1
+        self.line_width_spinbox.setDecimals(1) # 1 decimal place
+        style_settings_layout.addWidget(self.line_width_spinbox, 0, 1)
+
+        style_settings_layout.addWidget(QLabel("Line Color:"), 1, 0)
+        self.line_color_btn = ColorButton(color=(255, 0, 0)) # Default red
+        style_settings_layout.addWidget(self.line_color_btn, 1, 1)
+
+        style_settings_layout.addWidget(QLabel("Text Color:"), 2, 0)
+        self.text_color_btn = ColorButton(color=(255, 0, 0)) # Default red
+        style_settings_layout.addWidget(self.text_color_btn, 2, 1)
+
+        style_settings_layout.addWidget(QLabel("Font Size:"), 3, 0)
+        self.font_size_spinbox = QDoubleSpinBox()
+        self.font_size_spinbox.setRange(2.0, 24.0) # 2.0 to 24.0 pt
+        self.font_size_spinbox.setValue(6.0) # Default to 6.0 pt
+        self.font_size_spinbox.setSingleStep(0.5) # Step by 0.5
+        self.font_size_spinbox.setDecimals(1) # 1 decimal place
+        style_settings_layout.addWidget(self.font_size_spinbox, 3, 1)
+        
+        style_settings_layout.addWidget(QLabel("Font Weight:"), 4, 0)
+        self.font_weight_combo = QComboBox()
+        self.font_weight_combo.addItem("Normal", QFont.Normal)
+        self.font_weight_combo.addItem("Bold", QFont.Bold)
+        style_settings_layout.addWidget(self.font_weight_combo, 4, 1)
+        
+        settings_layout.addLayout(style_settings_layout)
+        
+        # Apply buttons
+        apply_buttons_layout = QHBoxLayout()
+        self.apply_to_selected_btn = QPushButton("Apply to Selected")
+        self.apply_to_all_btn = QPushButton("Apply to All")
+        apply_buttons_layout.addWidget(self.apply_to_selected_btn)
+        apply_buttons_layout.addWidget(self.apply_to_all_btn)
+        settings_layout.addLayout(apply_buttons_layout)
+
         measure_group = create_collapsible_group("Measurement Tools", measure_layout)
         dock_layout.addWidget(measure_group)
+        
+        settings_group = create_collapsible_group("Measurement Settings", settings_layout)
+        settings_group.setChecked(True) # Start expanded to show the new features
+        dock_layout.addWidget(settings_group)
         
         # Store color buttons for each label
         self.label_color_buttons = {}
@@ -1666,6 +1864,8 @@ class ViewerController(QObject):
     def setup_slice_view_connections(self) -> None:
         """Connect slice view signals."""
         for name, slice_view in self.view.slice_views.items():
+            # Set controller reference for eraser functionality  
+            slice_view.controller = self
             slice_view.wheelScrolled.connect(partial(self._on_wheel_scroll, name))
             slice_view.mousePositionChanged.connect(partial(self._on_mouse_position, name))
             slice_view.lineMeasured.connect(partial(self._on_line_measured, name))
@@ -1673,14 +1873,184 @@ class ViewerController(QObject):
     def setup_measurement_connections(self):
         """Connect measurement-related signals."""
         self.view.line_tool_btn.clicked.connect(self.toggle_line_tool)
+        self.view.eraser_tool_btn.clicked.connect(self.toggle_eraser_tool)
         self.measurement_manager.measurementAdded.connect(self._on_measurement_added)
         self.measurement_manager.measurementRemoved.connect(self._on_measurement_removed)
+        self.measurement_manager.settingsChanged.connect(self._on_measurement_settings_changed)
+        
+        # Enhanced settings connections
+        self.view.select_all_btn.clicked.connect(self.select_all_measurements)
+        self.view.deselect_all_btn.clicked.connect(self.deselect_all_measurements)
+        self.view.apply_to_selected_btn.clicked.connect(self.apply_style_to_selected)
+        self.view.apply_to_all_btn.clicked.connect(self.apply_style_to_all)
+        
+        # Right-click context menu
+        self.view.measurements_list.customContextMenuRequested.connect(self.show_measurement_context_menu)
+        
+        # Double-click to navigate to measurement
+        self.view.measurements_list.itemDoubleClicked.connect(self.navigate_to_measurement)
     
     def toggle_line_tool(self, checked: bool):
         """Toggle the line measurement tool."""
-        mode = 'line' if checked else 'off'
+        if checked:
+            # Uncheck eraser tool
+            self.view.eraser_tool_btn.blockSignals(True)
+            self.view.eraser_tool_btn.setChecked(False)
+            self.view.eraser_tool_btn.blockSignals(False)
+            mode = 'line'
+        else:
+            mode = 'off'
         for view in self.view.slice_views.values():
             view.measure_mode = mode
+    
+    def toggle_eraser_tool(self, checked: bool):
+        """Toggle the eraser tool."""
+        if checked:
+            # Uncheck line tool
+            self.view.line_tool_btn.blockSignals(True)
+            self.view.line_tool_btn.setChecked(False)
+            self.view.line_tool_btn.blockSignals(False)
+            mode = 'erase'
+        else:
+            mode = 'off'
+        for view in self.view.slice_views.values():
+            view.measure_mode = mode
+    
+    def select_all_measurements(self):
+        """Select all measurements in the list."""
+        for i in range(self.view.measurements_list.count()):
+            item = self.view.measurements_list.item(i)
+            if item:
+                item.setSelected(True)
+    
+    def deselect_all_measurements(self):
+        """Deselect all measurements in the list."""
+        self.view.measurements_list.clearSelection()
+    
+    def apply_style_to_selected(self):
+        """Apply current style settings to selected measurements."""
+        selected_items = self.view.measurements_list.selectedItems()
+        if not selected_items:
+            QMessageBox.information(self.view, "No Selection", "Please select measurements to apply style to.")
+            return
+        
+        measurement_ids = []
+        for item in selected_items:
+            measurement_id = item.data(Qt.UserRole)
+            if measurement_id:
+                measurement_ids.append(measurement_id)
+        
+        if measurement_ids:
+            # Get current style settings from UI
+            line_color = self.view.line_color_btn.color()
+            line_width = self.view.line_width_spinbox.value()
+            text_color = self.view.text_color_btn.color()
+            text_font_size = self.view.font_size_spinbox.value()
+            text_font_weight = self.view.font_weight_combo.currentData()
+            
+            # Apply to measurements
+            self.measurement_manager.apply_style_to_measurements(
+                measurement_ids, 
+                line_color=line_color, 
+                line_width=line_width,
+                text_color=text_color,
+                text_font_size=text_font_size,
+                text_font_weight=text_font_weight
+            )
+    
+    def apply_style_to_all(self):
+        """Apply current style settings to all measurements."""
+        if not self.measurement_manager.measurements:
+            QMessageBox.information(self.view, "No Measurements", "No measurements to apply style to.")
+            return
+        
+        # Get current style settings from UI
+        line_color = self.view.line_color_btn.color()
+        line_width = self.view.line_width_spinbox.value()
+        text_color = self.view.text_color_btn.color()
+        text_font_size = self.view.font_size_spinbox.value()
+        text_font_weight = self.view.font_weight_combo.currentData()
+        
+        # Apply to all measurements
+        self.measurement_manager.apply_style_to_all_measurements(
+            line_color=line_color, 
+            line_width=line_width,
+            text_color=text_color,
+            text_font_size=text_font_size,
+            text_font_weight=text_font_weight
+        )
+    
+    def show_measurement_context_menu(self, position: QPoint):
+        """Show context menu for measurement list."""
+        item = self.view.measurements_list.itemAt(position)
+        if not item:
+            return
+        
+        # Create context menu
+        menu = QMenu(self.view)
+        
+        # Copy coordinates action
+        copy_coords_action = menu.addAction("Copy Coordinates")
+        copy_coords_action.triggered.connect(lambda: self.copy_measurement_coordinates(item))
+        
+        # Copy length action
+        copy_length_action = menu.addAction("Copy Length") 
+        copy_length_action.triggered.connect(lambda: self.copy_measurement_length(item))
+        
+        menu.addSeparator()
+        
+        # Apply current style to all action
+        apply_to_all_action = menu.addAction("Apply Style to All")
+        apply_to_all_action.triggered.connect(self.apply_style_to_all)
+        
+        menu.addSeparator()
+        
+        # Delete action
+        delete_action = menu.addAction("Delete")
+        delete_action.triggered.connect(lambda: self.delete_measurement_by_item(item))
+        
+        # Show menu
+        menu.exec_(self.view.measurements_list.mapToGlobal(position))
+    
+    def copy_measurement_coordinates(self, item):
+        """Copy measurement coordinates to clipboard."""
+        measurement_id = item.data(Qt.UserRole)
+        if measurement_id and measurement_id in self.measurement_manager.measurements:
+            measurement = self.measurement_manager.measurements[measurement_id]
+            coords_text = (f"Start: {measurement.start_world}\\n"
+                          f"End: {measurement.end_world}")
+            QApplication.clipboard().setText(coords_text)
+    
+    def copy_measurement_length(self, item):
+        """Copy measurement length to clipboard."""
+        measurement_id = item.data(Qt.UserRole)
+        if measurement_id and measurement_id in self.measurement_manager.measurements:
+            measurement = self.measurement_manager.measurements[measurement_id]
+            QApplication.clipboard().setText(f"{measurement.length_mm:.2f} mm")
+    
+    def delete_measurement_by_item(self, item):
+        """Delete measurement by list item."""
+        measurement_id = item.data(Qt.UserRole)
+        if measurement_id:
+            self.measurement_manager.remove_measurement(measurement_id)
+    
+    def navigate_to_measurement(self, item):
+        """Navigate to the slice containing the selected measurement."""
+        measurement_id = item.data(Qt.UserRole)
+        if measurement_id and measurement_id in self.measurement_manager.measurements:
+            measurement = self.measurement_manager.measurements[measurement_id]
+            # Navigate to the correct slice in the measurement's view
+            self.model.set_slice(measurement.view_name, measurement.slice_idx)
+            # Update the UI to reflect the new slice
+            controls = self.view.slice_controls[measurement.view_name]
+            controls['slider'].blockSignals(True)
+            controls['spinbox'].blockSignals(True)
+            controls['slider'].setValue(measurement.slice_idx)
+            controls['spinbox'].setValue(measurement.slice_idx)
+            controls['slider'].blockSignals(False)
+            controls['spinbox'].blockSignals(False)
+            # Trigger view update
+            self._update_view(measurement.view_name)
 
     def _on_line_measured(self, view_name: str, start_pos: QPointF, end_pos: QPointF):
         """Handle a new line measurement from a slice view."""
@@ -1689,15 +2059,40 @@ class ViewerController(QObject):
 
     def _on_measurement_added(self, measurement: Measurement):
         """Add a graphical representation of the measurement to the scene."""
-        view = self.view.slice_views.get(measurement.view_name)
+        self._create_measurement_graphics(measurement, measurement.view_name)
+        
+        # Add to measurement list widget with enhanced display format
+        display_text = (f"Line {measurement.id}: {measurement.length_mm:.2f} mm\n"
+                       f"  {measurement.view_name.title()} view, slice {measurement.slice_idx}")
+        list_item = self.view.measurements_list.addItem(display_text)
+        if hasattr(list_item, 'setData'):
+            list_item.setData(Qt.UserRole, measurement.id)
+        elif isinstance(list_item, int): # addItem returns int position
+            actual_item = self.view.measurements_list.item(list_item)
+            if actual_item:
+                actual_item.setData(Qt.UserRole, measurement.id)
+                # Add tooltip with detailed information
+                tooltip_text = (f"Length: {measurement.length_mm:.2f} mm\n"
+                              f"View: {measurement.view_name.title()}\n"
+                              f"Slice: {measurement.slice_idx}\n"
+                              f"Start: ({measurement.start_world[0]:.1f}, {measurement.start_world[1]:.1f}, {measurement.start_world[2]:.1f})\n"
+                              f"End: ({measurement.end_world[0]:.1f}, {measurement.end_world[1]:.1f}, {measurement.end_world[2]:.1f})\n"
+                              f"Double-click to navigate to slice"
+                              )
+                actual_item.setToolTip(tooltip_text)
+    
+    def _create_measurement_graphics(self, measurement: Measurement, view_name: str):
+        """Create graphics items for a measurement in a specific view."""
+        view = self.view.slice_views.get(view_name)
         if not view:
             return
 
         # Only show measurement on the correct slice
-        if view.model.view_configs[measurement.view_name]['slice'] != measurement.slice_idx:
+        current_slice = self.model.view_configs[view_name]['slice']
+        if current_slice != measurement.slice_idx:
             return
 
-        axis = self.model.view_configs[measurement.view_name]['axis']
+        axis = self.model.view_configs[view_name]['axis']
         if axis == 0: # Sagittal
             p1_img = QPointF(measurement.start_voxel[1], measurement.start_voxel[2])
             p2_img = QPointF(measurement.end_voxel[1], measurement.end_voxel[2])
@@ -1713,47 +2108,44 @@ class ViewerController(QObject):
         p1_draw = QPointF(p1_img.x(), h - 1 - p1_img.y())
         p2_draw = QPointF(p2_img.x(), h - 1 - p2_img.y())
 
+        # Create line graphics item
         line = QGraphicsLineItem(p1_draw.x(), p1_draw.y(), p2_draw.x(), p2_draw.y())
-        line.setPen(QPen(QColor(255, 0, 0), 2))
+        line.setPen(QPen(measurement.line_color, measurement.line_width))
         line.setData(0, measurement.id)  # Store measurement ID
+        line.setFlag(QGraphicsLineItem.ItemIsSelectable, True)
         view.scene.addItem(line)
 
+        # Create text graphics item
         text = QGraphicsSimpleTextItem(f"{measurement.length_mm:.2f} mm")
-        text.setBrush(QBrush(QColor(255, 0, 0)))
-        text.setPos((p1_draw.x() + p2_draw.x()) / 2, (p1_draw.y() + p2_draw.y()) / 2)
+        text.setBrush(QBrush(measurement.text_color))
+        # Set font with custom size and weight
+        font = text.font()
+        font.setPointSizeF(measurement.text_font_size)  # Support float font size
+        font.setWeight(measurement.text_font_weight)
+        text.setFont(font)
         text.setPos((p1_draw.x() + p2_draw.x()) / 2, (p1_draw.y() + p2_draw.y()) / 2)
         text.setData(0, measurement.id)
+        text.setFlag(QGraphicsSimpleTextItem.ItemIsSelectable, True)
         view.scene.addItem(text)
+        
+        # Track graphics items
+        self.measurement_manager.add_graphics_items(measurement.id, view_name, line, text)
 
     def _on_measurement_settings_changed(self):
         """Redraw all measurements with new settings."""
-        # Clear all existing graphics items for measurements
-        for view_name, slice_view in self.view.slice_views.items():
-            items_to_remove = []
-            for item in slice_view.scene.items():
-                if item.data(0) in self.measurement_manager.measurements: # Check if it's a measurement item
-                    items_to_remove.append(item)
-            for item in items_to_remove:
-                slice_view.scene.removeItem(item)
-                del item
-
-        # Redraw all measurements with new settings
-        for measurement in self.measurement_manager.measurements.values():
-            self._on_measurement_added(measurement)
+        # Use the measurement manager's refresh method
+        self.measurement_manager.refresh_measurement_display(self)
 
     def _on_measurement_removed(self, measurement_id: int):
         """Remove a measurement's graphics from all views."""
+        # Remove from measurement list widget
         for i in range(self.view.measurements_list.count()):
             item = self.view.measurements_list.item(i)
-            if item.data(Qt.UserRole) == measurement_id:
+            if item and item.data(Qt.UserRole) == measurement_id:
                 self.view.measurements_list.takeItem(i)
                 break
-
-        for view in self.view.slice_views.values():
-            for item in view.scene.items():
-                if item.data(0) == measurement_id:
-                    view.scene.removeItem(item)
-                    del item
+        
+        # Graphics removal is handled by MeasurementManager.remove_measurement()
 
     def delete_selected_measurement(self):
         """Delete the currently selected measurement."""
@@ -1792,34 +2184,6 @@ class ViewerController(QObject):
                 self.view.status_label.setText(f"Measurements exported to {Path(filepath).name}")
             except Exception as e:
                 QMessageBox.critical(self.view, "Error", f"Failed to export measurements: {e}")
-
-        view.scene.addItem(text)
-
-    def _on_measurement_removed(self, measurement_id: int):
-        """Remove a measurement's graphics from all views."""
-        for view in self.view.slice_views.values():
-            for item in view.scene.items():
-                if item.data(0) == measurement_id:
-                    view.scene.removeItem(item)
-                    del item
-
-    def delete_selected_measurement(self):
-        """Delete the currently selected measurement."""
-        # Check list widget selection first
-        selected_list_items = self.view.measurements_list.selectedItems()
-        if selected_list_items:
-            measurement_id = selected_list_items[0].data(Qt.UserRole)
-            self.measurement_manager.remove_measurement(measurement_id)
-            return
-
-        for view in self.view.slice_views.values():
-            selected_items = view.scene.selectedItems()
-            if selected_items:
-                # Assuming the first selected item's data is the measurement ID
-                measurement_id = selected_items[0].data(0)
-                if measurement_id:
-                    self.measurement_manager.remove_measurement(measurement_id)
-                    break  # Assume only one measurement can be selected at a time
 
     def export_measurements(self):
         """Export measurements to a CSV file."""
@@ -2192,6 +2556,10 @@ class ViewerController(QObject):
         
         # Update model
         self.model.set_slice(view_name, value)
+        
+        # Update measurement display for this slice
+        if hasattr(self, 'measurement_manager'):
+            self.measurement_manager.update_measurement_display(view_name, value, self)
         
         # Debounced update
         self.update_timer.start(40)  # 40ms debounce for smooth scrolling

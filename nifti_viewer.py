@@ -652,10 +652,12 @@ class Measurement:
         self.text_color = QColor(255, 0, 0)  # Default red
         self.text_font_size = 5.0  # Smaller default font size
         self.text_font_weight = QFont.Normal
-        
-        # Persistent layout fields (image coordinates)
-        self.text_offset_img = None   # QPointF(dx, dy) relative to anchor
-        self.text_anchor = 'center'   # 'p1' | 'p2' | 'center' 
+
+        # Persistent layout fields (drawing coordinates)
+        # text_offset_draw stores the offset vector in the same coordinate system
+        # used for drawing (flipped image coordinates)
+        self.text_offset_draw = None   # QPointF(dx, dy) relative to anchor
+        self.text_anchor = 'center'   # 'p1' | 'p2' | 'center'
         self.text_locked = False      # UI can toggle "lock label position"
     
     def apply_style(self, line_color=None, line_width=None, text_color=None, text_font_size=None, text_font_weight=None):
@@ -2266,6 +2268,7 @@ class ViewerController(QObject):
         line.setPen(QPen(measurement.line_color, measurement.line_width))
         line.setData(0, measurement.id)  # Store measurement ID
         line.setFlag(QGraphicsLineItem.ItemIsSelectable, True)
+        line.setZValue(1)
         view.scene.addItem(line)
 
         # Create text graphics item
@@ -2283,6 +2286,7 @@ class ViewerController(QObject):
         text.setPos(text_pos)
         text.setData(0, measurement.id)
         text.setFlag(QGraphicsSimpleTextItem.ItemIsSelectable, True)
+        text.setZValue(3)
         view.scene.addItem(text)
         
         # Add arrow only if text is significantly displaced from line center
@@ -2291,7 +2295,9 @@ class ViewerController(QObject):
                                (text_pos.y() - line_center.y()) ** 2) ** 0.5
         if distance_from_center > 8:  # Small threshold - since text is much closer now
             arrow_item = self._create_arrow_annotation(text_pos, line_center, measurement)
-            view.scene.addItem(arrow_item)
+            if arrow_item:
+                arrow_item.setZValue(2)
+                view.scene.addItem(arrow_item)
         
         # Track graphics items (including optional arrow)
         self.measurement_manager.add_graphics_items(measurement.id, view_name, line, text, arrow_item)
@@ -2317,12 +2323,33 @@ class ViewerController(QObject):
         else:
             line_unit = QPointF(1, 0)
             perp_unit = QPointF(0, 1)
+
+        # Pre-calc safe drawing rect for boundary cost
+        safe_rect = None
+        if hasattr(view, 'pixmap_item') and view.pixmap_item.pixmap() and not view.pixmap_item.pixmap().isNull():
+            pixmap = view.pixmap_item.pixmap()
+            image_rect = QRectF(0, 0, pixmap.width(), pixmap.height())
+            safe_rect = image_rect.adjusted(2, 2, -2, -2)
+
+        def point_to_segment_distance(pt: QPointF, a: QPointF, b: QPointF) -> float:
+            """Compute minimal distance from pt to line segment ab."""
+            ax, ay = a.x(), a.y()
+            bx, by = b.x(), b.y()
+            px, py = pt.x(), pt.y()
+            dx, dy = bx - ax, by - ay
+            if dx == 0 and dy == 0:
+                return ((px - ax) ** 2 + (py - ay) ** 2) ** 0.5
+            t = ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)
+            t = max(0, min(1, t))
+            proj_x = ax + t * dx
+            proj_y = ay + t * dy
+            return ((px - proj_x) ** 2 + (py - proj_y) ** 2) ** 0.5
         
         # Try to preserve existing position first
-        if measurement and measurement.text_offset_img and measurement.text_anchor:
-            old_pos = self._get_position_from_anchor(measurement.text_anchor, measurement.text_offset_img, 
+        if measurement and measurement.text_offset_draw and measurement.text_anchor:
+            old_pos = self._get_position_from_anchor(measurement.text_anchor, measurement.text_offset_draw,
                                                    p1, p2, line_center)
-            if old_pos and not self._has_collision_with_reservation(view, old_pos, text_width, text_height, 
+            if old_pos and not self._has_collision_with_reservation(view, old_pos, text_width, text_height,
                                                                    text_item, p1, p2, occupied_rects):
                 return old_pos
         
@@ -2359,10 +2386,11 @@ class ViewerController(QObject):
                     # Calculate priority: closer to line + endpoint preference
                     priority = anchor_priority * dist_priority
                     # Prefer positions similar to old position for stability
-                    if measurement and measurement.text_offset_img:
-                        old_offset = measurement.text_offset_img
+                    if measurement and measurement.text_offset_draw:
+                        old_offset = measurement.text_offset_draw
                         new_offset = QPointF(dx * distance, dy * distance)
-                        similarity = 1.0 / (1.0 + ((old_offset.x() - new_offset.x())**2 + (old_offset.y() - new_offset.y())**2)**0.5 / 20)
+                        diff_sq = (old_offset.x() - new_offset.x())**2 + (old_offset.y() - new_offset.y())**2
+                        similarity = 1.0 / (1.0 + (diff_sq ** 0.5) / 20)
                         priority *= (1.0 + similarity * 0.5)  # Bonus for similar positions
                     
                     candidates.append((pos, priority, anchor_name, QPointF(dx * distance, dy * distance)))
@@ -2373,23 +2401,68 @@ class ViewerController(QObject):
         # Add fallback center position
         candidates.append((line_center, 0.1, 'center', QPointF(0, 0)))
         
-        # Find best candidate
+        # Find best candidate by cost minimization
         best_pos = line_center
-        best_anchor = 'center' 
+        best_anchor = 'center'
         best_offset = QPointF(0, 0)
-        
-        for candidate_pos, _, anchor_name, offset in candidates:
-            if not self._has_collision_with_reservation(view, candidate_pos, text_width, text_height, 
-                                                       text_item, p1, p2, occupied_rects):
+        best_cost = float('inf')
+
+        for candidate_pos, priority, anchor_name, offset in candidates:
+            if self._has_collision_with_reservation(view, candidate_pos, text_width, text_height,
+                                                    text_item, p1, p2, occupied_rects):
+                continue
+
+            candidate_rect = QRectF(candidate_pos.x(), candidate_pos.y(), text_width, text_height)
+            candidate_center = QPointF(candidate_pos.x() + text_width / 2,
+                                       candidate_pos.y() + text_height / 2)
+
+            # Cost components
+            dist_line = point_to_segment_distance(candidate_center, p1, p2)
+            if measurement and measurement.text_offset_draw:
+                old_offset = measurement.text_offset_draw
+                offset_diff = ((old_offset.x() - offset.x())**2 +
+                               (old_offset.y() - offset.y())**2) ** 0.5
+            else:
+                offset_diff = 0
+
+            edge_cost = 0
+            if safe_rect is not None:
+                left_dist = candidate_rect.left() - safe_rect.left()
+                right_dist = safe_rect.right() - candidate_rect.right()
+                top_dist = candidate_rect.top() - safe_rect.top()
+                bottom_dist = safe_rect.bottom() - candidate_rect.bottom()
+                min_edge_dist = min(left_dist, right_dist, top_dist, bottom_dist)
+                edge_cost = 1.0 / (1.0 + min_edge_dist)
+
+            iou_cost = 0
+            if occupied_rects:
+                for occ in occupied_rects:
+                    inter = candidate_rect.intersected(occ)
+                    if not inter.isEmpty():
+                        inter_area = inter.width() * inter.height()
+                        union_area = (candidate_rect.width() * candidate_rect.height() +
+                                      occ.width() * occ.height() - inter_area)
+                        if union_area > 0:
+                            iou = inter_area / union_area
+                            if iou > iou_cost:
+                                iou_cost = iou
+
+            cost = (1.0 * dist_line +
+                    0.6 * offset_diff +
+                    0.3 * edge_cost +
+                    0.2 * iou_cost -
+                    priority * 0.1)
+
+            if cost < best_cost:
+                best_cost = cost
                 best_pos = candidate_pos
                 best_anchor = anchor_name
                 best_offset = offset
-                break
         
         # Store persistent layout info
         if measurement:
             measurement.text_anchor = best_anchor
-            measurement.text_offset_img = best_offset
+            measurement.text_offset_draw = best_offset
         
         return best_pos
     
@@ -2567,7 +2640,8 @@ class ViewerController(QObject):
         arrow_item.setPen(QPen(measurement.text_color, 1.5))
         arrow_item.setData(0, measurement.id)  # Store measurement ID
         arrow_item.setFlag(QGraphicsPathItem.ItemIsSelectable, True)
-        
+        arrow_item.setZValue(2)
+
         return arrow_item
     
     def _recalculate_text_positions(self, view_name: str):
@@ -2668,7 +2742,9 @@ class ViewerController(QObject):
                 new_arrow_item = None
                 if distance_from_center > 8:
                     new_arrow_item = self._create_arrow_annotation(new_text_pos, line_center, measurement)
-                    view.scene.addItem(new_arrow_item)
+                    if new_arrow_item:
+                        new_arrow_item.setZValue(2)
+                        view.scene.addItem(new_arrow_item)
                 
                 # Update graphics items tracking
                 self.measurement_manager.add_graphics_items(measurement.id, view_name, line_item, text_item, new_arrow_item)

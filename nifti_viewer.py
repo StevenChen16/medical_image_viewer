@@ -2645,6 +2645,9 @@ class ViewerController(QObject):
         self.view.snap_distance_spinbox.valueChanged.connect(
             self.update_snap_settings)
 
+        # Export measurements
+        self.view.export_measurements_btn.clicked.connect(self.export_measurements)
+
     def update_snap_settings(self):
         """Update snap settings for all slice views."""
         snap_enabled = self.view.snap_enabled_checkbox.isChecked()

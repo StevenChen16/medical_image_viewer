@@ -39,11 +39,11 @@ from PySide6.QtWidgets import (
     QFileDialog, QMessageBox, QProgressBar, QToolTip, QFrame, QLineEdit,
     QDialog, QTabWidget, QTextEdit, QScrollArea, QSizePolicy, QColorDialog, 
     QListWidget, QListWidgetItem, QGraphicsLineItem, QGraphicsSimpleTextItem, QMenu, QComboBox, QGraphicsEllipseItem,
-    QGraphicsPathItem
+    QGraphicsPathItem, QGraphicsItem
 )
 from PySide6.QtCore import (
     Qt, QObject, Signal, QThread, QRunnable, QThreadPool, QTimer,
-    QRect, QRectF, QSize, QPointF, QPoint
+    QRect, QRectF, QSize, QPointF, QPoint, QLineF, QLine
 )
 from PySide6.QtGui import (
     QPixmap, QPainter, QImage, QPen, QBrush, QColor, QTransform,
@@ -367,15 +367,13 @@ class ImageModel(QObject):
     def render_slice(self, view_name: str, slice_idx: int,
                     show_overlay: bool = True, alpha: float = 0.5) -> QImage:
         """Public rendering interface with LRU caching."""
-        rotation = self.view_configs[view_name]['rotation']
         return self._render_slice_cached(view_name, slice_idx,
                                          show_overlay and self.global_overlay,
-                                         alpha, rotation)
+                                         alpha)
 
     @lru_cache(maxsize=100)
     def _render_slice_cached(self, view_name: str, slice_idx: int,
-                              show_overlay: bool, alpha: float,
-                              rotation: int) -> QImage:
+                              show_overlay: bool, alpha: float) -> QImage:
         """Internal slice renderer that is LRU cached."""
         config = self.view_configs[view_name]
         axis = config['axis']
@@ -737,8 +735,8 @@ class MeasurementManager(QObject):
         else:  # Axial
             return (float(x), float(y), float(slice_idx))
 
-    def add_graphics_items(self, measurement_id: int, view_name: str, line_item, text_item, arrow_item=None):
-        """Track graphics items for a measurement."""
+    def add_graphics_items(self, measurement_id: int, view_name: str, line_item, text_item, arrow_item=None, handle1=None, handle2=None):
+        """Track graphics items for a measurement including draggable handles."""
         if measurement_id not in self._graphics_items:
             self._graphics_items[measurement_id] = {}
         if view_name not in self._graphics_items[measurement_id]:
@@ -747,6 +745,12 @@ class MeasurementManager(QObject):
         items = [line_item, text_item]
         if arrow_item:
             items.append(arrow_item)
+        else:
+            items.append(None)  # Keep consistent indexing
+        if handle1:
+            items.append(handle1)
+        if handle2:
+            items.append(handle2)
         self._graphics_items[measurement_id][view_name] = items
     
     def remove_graphics_items(self, measurement_id: int, view_name: str = None):
@@ -852,6 +856,81 @@ class MeasurementManager(QObject):
         for measurement in self.measurements.values():
             measurement.apply_style(**style_kwargs)
         self.settingsChanged.emit()
+
+
+# ============================================================================
+# DRAGGABLE GRAPHICS ITEMS - Interactive Measurement Components
+# ============================================================================
+
+class EndpointHandle(QGraphicsEllipseItem):
+    """Draggable handle for measurement endpoints with position change callbacks."""
+    
+    def __init__(self, x, y, radius, measurement_id, handle_index, controller, view_name, parent=None):
+        # 让句柄几何以原点为中心，位置用 setPos 控制
+        super().__init__(-radius, -radius, 2 * radius, 2 * radius, parent)
+        self.measurement_id = measurement_id
+        self.handle_index = handle_index  # 0 for start, 1 for end
+        self.controller = controller
+        self.view_name = view_name
+        
+        # 用位置放到目标点
+        self.setPos(QPointF(x, y))
+        
+        # Visual styling
+        self.setBrush(QBrush(QColor(255, 255, 0, 180)))
+        self.setPen(QPen(QColor(0, 0, 0, 220), 1))
+        self.setZValue(10)  # Above other items
+        self.setData(0, measurement_id)
+        
+        # Enable dragging
+        self.setFlag(QGraphicsItem.ItemIsMovable, True)
+        self.setFlag(QGraphicsItem.ItemSendsScenePositionChanges, True)
+        self.setCursor(Qt.OpenHandCursor)
+    
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemPositionChange and self.controller:
+            # 边界夹取要考虑半径（因为 pos() 表示圆心）
+            if hasattr(self.parentItem(), 'pixmap') and not self.parentItem().pixmap().isNull():
+                pixmap = self.parentItem().pixmap()
+                rect = QRectF(0, 0, pixmap.width(), pixmap.height())
+                r = self.rect().width() * 0.5  # 半径
+                clamped = QPointF(
+                    max(r, min(rect.width()  - 1 - r, value.x())),
+                    max(r, min(rect.height() - 1 - r, value.y()))
+                )
+                value = clamped
+            
+            # Call controller callback
+            if hasattr(self.controller, '_on_handle_moved'):
+                QTimer.singleShot(0, lambda: self.controller._on_handle_moved(
+                    self.view_name, self.measurement_id, self.handle_index, value))
+        
+        return super().itemChange(change, value)
+
+
+class DraggableLine(QGraphicsLineItem):
+    """Draggable line for moving entire measurements with position change callbacks."""
+    
+    def __init__(self, line, measurement_id, controller, view_name, parent=None):
+        super().__init__(line, parent)
+        self.measurement_id = measurement_id
+        self.controller = controller
+        self.view_name = view_name
+        
+        # Enable dragging
+        self.setFlag(QGraphicsItem.ItemIsMovable, True)
+        self.setFlag(QGraphicsItem.ItemSendsScenePositionChanges, True)
+        self.setCursor(Qt.SizeAllCursor)
+    
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemPositionChange and self.controller:
+            # 以"尝试位移量"作为 delta，驱动数据更新
+            delta = value - self.pos()
+            if delta.manhattanLength() != 0:
+                QTimer.singleShot(0, lambda: self.controller._on_line_moved(self.view_name, self.measurement_id, delta))
+            # 关键：阻止 item 累积位移，返回当前位置，不让它真的移动
+            return self.pos()
+        return super().itemChange(change, value)
 
 
 # ============================================================================ 
@@ -1395,13 +1474,11 @@ class SliceView(QGraphicsView):
             self._snap_preview_item.setBrush(QBrush(QColor(255, 255, 0, 100)))  # Semi-transparent fill
     
     def _clear_snap_preview(self):
-        """Clear snap preview graphics."""
+        """Clear snap preview graphics unconditionally."""
         if self._snap_preview_item:
-            # Since it's now a child item, we can directly delete it or set parent to None
-            if self._snap_preview_item.parentItem():
-                self._snap_preview_item.setParentItem(None)
-            elif self._snap_preview_item.scene():
-                self.scene.removeItem(self._snap_preview_item)
+            # Unconditionally remove from scene if present - fixed version
+            if self._snap_preview_item.scene():
+                self._snap_preview_item.scene().removeItem(self._snap_preview_item)
             self._snap_preview_item = None
 
     def _highlight_measurements_under_cursor(self, view_pos: QPointF):
@@ -2370,8 +2447,9 @@ class ViewerController(QObject):
         p1_draw = QPointF(p1_img.x(), h - 1 - p1_img.y())
         p2_draw = QPointF(p2_img.x(), h - 1 - p2_img.y())
 
-        # Create line graphics item as child of pixmap_item
-        line = QGraphicsLineItem(p1_draw.x(), p1_draw.y(), p2_draw.x(), p2_draw.y(), parent=view.pixmap_item)
+        # Create draggable line graphics item as child of pixmap_item
+        line_geom = QLineF(p1_draw.x(), p1_draw.y(), p2_draw.x(), p2_draw.y())
+        line = DraggableLine(line_geom, measurement.id, self, view_name, parent=view.pixmap_item)
         line.setPen(QPen(measurement.line_color, measurement.line_width))
         line.setData(0, measurement.id)  # Store measurement ID
         line.setFlag(QGraphicsLineItem.ItemIsSelectable, True)
@@ -2385,8 +2463,9 @@ class ViewerController(QObject):
         font.setWeight(measurement.text_font_weight)
         text.setFont(font)
         
-        # Text position follows pixmap_item but appearance ignores transformations (stays upright)
-        text.setFlag(QGraphicsSimpleTextItem.ItemIgnoresTransformations, True)
+        # Text uses reverse rotation to stay upright (maintains coordinate system consistency)
+        rotation = self.model.view_configs[view_name]['rotation']
+        text.setRotation(-rotation)
         
         # Use intelligent text positioning with collision avoidance and persistence
         line_center = QPointF((p1_draw.x() + p2_draw.x()) / 2, (p1_draw.y() + p2_draw.y()) / 2)
@@ -2400,12 +2479,15 @@ class ViewerController(QObject):
         distance_from_center = ((text_pos.x() - line_center.x()) ** 2 + 
                                (text_pos.y() - line_center.y()) ** 2) ** 0.5
         if distance_from_center > 8:  # Small threshold - since text is much closer now
-            arrow_item = self._create_arrow_annotation(text_pos, line_center, measurement)
-            if arrow_item:
-                arrow_item.setParentItem(view.pixmap_item)
+            arrow_item = self._create_arrow_annotation(text, p1_draw, p2_draw, measurement)
         
-        # Track graphics items (including optional arrow)
-        self.measurement_manager.add_graphics_items(measurement.id, view_name, line, text, arrow_item)
+        # Create endpoint handles for dragging
+        handle_radius = 5
+        handle1 = EndpointHandle(p1_draw.x(), p1_draw.y(), handle_radius, measurement.id, 0, self, view_name, parent=view.pixmap_item)
+        handle2 = EndpointHandle(p2_draw.x(), p2_draw.y(), handle_radius, measurement.id, 1, self, view_name, parent=view.pixmap_item)
+        
+        # Track graphics items (including arrow and handles)
+        self.measurement_manager.add_graphics_items(measurement.id, view_name, line, text, arrow_item, handle1, handle2)
     
     def _calculate_text_position(self, view, p1: QPointF, p2: QPointF, text_item: QGraphicsSimpleTextItem, 
                                measurement=None, occupied_rects=None) -> QPointF:
@@ -2629,65 +2711,129 @@ class ViewerController(QObject):
                 
         return False
     
-    def _create_arrow_annotation(self, text_pos: QPointF, line_center: QPointF, measurement) -> QGraphicsPathItem:
-        """Create a prominent arrow pointing from line center to text edge (medical grade visibility)."""
-        # Calculate arrow direction (from line center to text center)
-        arrow_vector = QPointF(text_pos.x() - line_center.x(), text_pos.y() - line_center.y())
-        arrow_length = (arrow_vector.x() ** 2 + arrow_vector.y() ** 2) ** 0.5
-        
-        if arrow_length == 0:
+    def _create_arrow_annotation(self, text_item, p1_draw, p2_draw, measurement):
+        """Create precise arrow pointing from line to text edge using geometric intersection."""
+        line_center = QPointF((p1_draw.x() + p2_draw.x())/2, (p1_draw.y() + p2_draw.y())/2)
+
+        # 文字的包围盒（父坐标：pixmap_item）
+        text_rect_parent = text_item.mapRectToParent(text_item.boundingRect())
+        text_center = text_rect_parent.center()
+
+        # 指向文字中心的单位向量
+        v = QPointF(text_center.x() - line_center.x(), text_center.y() - line_center.y())
+        L = (v.x()**2 + v.y()**2) ** 0.5
+        if L == 0:
             return None
-            
-        # Normalize arrow vector
-        arrow_unit = QPointF(arrow_vector.x() / arrow_length, arrow_vector.y() / arrow_length)
+        u = QPointF(v.x()/L, v.y()/L)
+
+        # 与文字矩形求交，得到"触碰点"
+        hit = self._intersect_ray_with_rect(line_center, u, text_rect_parent)
+
+        # 起止点：离线中心稍微留个缝，再把终点往回缩一点，避免画进文字
+        start = QPointF(line_center.x() + u.x()*6, line_center.y() + u.y()*6)
+        end   = QPointF(hit.x() - u.x()*2,        hit.y() - u.y()*2)
+
+        path = QPainterPath(start)
+        path.lineTo(end)
         
-        # Calculate text bounds to find edge (more accurate estimation)
-        text_width = len(f"{measurement.length_mm:.2f} mm") * measurement.text_font_size * 0.6
-        text_height = measurement.text_font_size * 1.2
+        # 箭头三角
+        perp = QPointF(-u.y(), u.x())
+        head_len, head_w = 6, 3
+        p1 = QPointF(end.x() - u.x()*head_len + perp.x()*head_w, end.y() - u.y()*head_len + perp.y()*head_w)
+        p2 = QPointF(end.x() - u.x()*head_len - perp.x()*head_w, end.y() - u.y()*head_len - perp.y()*head_w)
+        path.lineTo(p1)
+        path.moveTo(end)
+        path.lineTo(p2)
+
+        item = QGraphicsPathItem(path, parent=text_item.parentItem())  # == pixmap_item
+        item.setPen(QPen(measurement.text_color, max(1.0, measurement.line_width*0.9)))
+        item.setZValue(text_item.zValue() - 1)
+        item.setData(0, measurement.id)
+        item.setFlag(QGraphicsItem.ItemIsSelectable, True)
+        return item
+    
+    def _intersect_ray_with_rect(self, ray_origin: QPointF, ray_direction: QPointF, rect: QRectF) -> QPointF:
+        """Find intersection point of ray with rectangle edge (closest to origin)."""
+        if rect.contains(ray_origin):
+            # If origin is inside rect, return the center
+            return rect.center()
         
-        # Optimized margins for better visibility and connection
-        line_margin = 5   # Slightly increased distance from line center
-        text_margin = min(text_width, text_height) / 2 + 3  # Reduced margin, closer to text
-        shortened_length = max(arrow_length - line_margin - text_margin, 8)  # Minimum 8px arrow
+        # Normalize ray direction
+        ray_length = (ray_direction.x() ** 2 + ray_direction.y() ** 2) ** 0.5
+        if ray_length == 0:
+            return rect.center()
         
-        # Arrow start and end points (from line center towards text edge)
-        arrow_start = QPointF(line_center.x() + arrow_unit.x() * line_margin,
-                             line_center.y() + arrow_unit.y() * line_margin)
-        arrow_end = QPointF(arrow_start.x() + arrow_unit.x() * shortened_length,
-                           arrow_start.y() + arrow_unit.y() * shortened_length)
+        ray_unit = QPointF(ray_direction.x() / ray_length, ray_direction.y() / ray_length)
         
-        # Create arrow path
-        arrow_path = QPainterPath()
-        arrow_path.moveTo(arrow_start)
-        arrow_path.lineTo(arrow_end)
+        # Test intersection with each edge of the rectangle
+        intersections = []
         
-        # Refined arrowhead for medical elegance
-        arrowhead_length = 6   # Restored to elegant size
-        arrowhead_width = 3    # Restored to elegant size
+        # Left edge (x = rect.left())
+        if ray_unit.x() != 0:
+            t = (rect.left() - ray_origin.x()) / ray_unit.x()
+            if t > 0:
+                y = ray_origin.y() + t * ray_unit.y()
+                if rect.top() <= y <= rect.bottom():
+                    intersections.append(QPointF(rect.left(), y))
         
-        # Calculate perpendicular vector for arrowhead
-        perp_vector = QPointF(-arrow_unit.y(), arrow_unit.x())
+        # Right edge (x = rect.right())
+        if ray_unit.x() != 0:
+            t = (rect.right() - ray_origin.x()) / ray_unit.x()
+            if t > 0:
+                y = ray_origin.y() + t * ray_unit.y()
+                if rect.top() <= y <= rect.bottom():
+                    intersections.append(QPointF(rect.right(), y))
         
-        # Arrowhead points - create prominent triangular arrowhead
-        head_point1 = QPointF(arrow_end.x() - arrow_unit.x() * arrowhead_length + perp_vector.x() * arrowhead_width,
-                             arrow_end.y() - arrow_unit.y() * arrowhead_length + perp_vector.y() * arrowhead_width)
-        head_point2 = QPointF(arrow_end.x() - arrow_unit.x() * arrowhead_length - perp_vector.x() * arrowhead_width,
-                             arrow_end.y() - arrow_unit.y() * arrowhead_length - perp_vector.y() * arrowhead_width)
+        # Top edge (y = rect.top())
+        if ray_unit.y() != 0:
+            t = (rect.top() - ray_origin.y()) / ray_unit.y()
+            if t > 0:
+                x = ray_origin.x() + t * ray_unit.x()
+                if rect.left() <= x <= rect.right():
+                    intersections.append(QPointF(x, rect.top()))
         
-        # Create prominent two-line arrowhead
-        arrow_path.lineTo(head_point1)
-        arrow_path.moveTo(arrow_end)
-        arrow_path.lineTo(head_point2)
+        # Bottom edge (y = rect.bottom())
+        if ray_unit.y() != 0:
+            t = (rect.bottom() - ray_origin.y()) / ray_unit.y()
+            if t > 0:
+                x = ray_origin.x() + t * ray_unit.x()
+                if rect.left() <= x <= rect.right():
+                    intersections.append(QPointF(x, rect.bottom()))
         
-        # Create graphics item with refined elegance
-        arrow_item = QGraphicsPathItem(arrow_path)
-        # Use bright contrasting color but elegant thin line
-        arrow_color = QColor(255, 255, 0)  # Bright yellow for maximum contrast
-        arrow_item.setPen(QPen(arrow_color, 0.6))  # Elegant thin line as requested
-        arrow_item.setData(0, measurement.id)  # Store measurement ID
-        arrow_item.setFlag(QGraphicsPathItem.ItemIsSelectable, True)
+        # Return closest intersection point
+        if intersections:
+            closest = intersections[0]
+            min_dist = ((closest.x() - ray_origin.x()) ** 2 + (closest.y() - ray_origin.y()) ** 2) ** 0.5
+            for point in intersections[1:]:
+                dist = ((point.x() - ray_origin.x()) ** 2 + (point.y() - ray_origin.y()) ** 2) ** 0.5
+                if dist < min_dist:
+                    min_dist = dist
+                    closest = point
+            return closest
         
-        return arrow_item
+        # Fallback to rect center
+        return rect.center()
+
+    def _intersect_ray_with_line(self, ray_origin: QPointF, ray_direction: QPointF, line_p1: QPointF, line_p2: QPointF) -> QPointF:
+        """Find closest point on line segment to ray origin, or line center if ray doesn't intersect."""
+        # Calculate closest point on line segment to ray origin
+        line_vector = QPointF(line_p2.x() - line_p1.x(), line_p2.y() - line_p1.y())
+        line_length_sq = line_vector.x() ** 2 + line_vector.y() ** 2
+        
+        if line_length_sq == 0:
+            return line_p1  # Line is a point
+        
+        # Project ray origin onto the line
+        to_origin = QPointF(ray_origin.x() - line_p1.x(), ray_origin.y() - line_p1.y())
+        projection = (to_origin.x() * line_vector.x() + to_origin.y() * line_vector.y()) / line_length_sq
+        
+        # Clamp to line segment
+        projection = max(0.0, min(1.0, projection))
+        
+        closest_point = QPointF(line_p1.x() + projection * line_vector.x(),
+                               line_p1.y() + projection * line_vector.y())
+        
+        return closest_point
     
     def _recalculate_text_positions(self, view_name: str):
         """Smart recalculation that preserves good positions and only moves conflicting ones."""
@@ -2797,9 +2943,7 @@ class ViewerController(QObject):
                                        (new_text_pos.y() - line_center.y()) ** 2) ** 0.5
                 new_arrow_item = None
                 if distance_from_center > 8:
-                    new_arrow_item = self._create_arrow_annotation(new_text_pos, line_center, measurement)
-                    if new_arrow_item:
-                        new_arrow_item.setParentItem(view.pixmap_item)
+                    new_arrow_item = self._create_arrow_annotation(text_item, p1, p2, measurement)
                 
                 # Update graphics items tracking
                 self.measurement_manager.add_graphics_items(measurement.id, view_name, line_item, text_item, new_arrow_item)
@@ -2819,6 +2963,205 @@ class ViewerController(QObject):
                 break
         
         # Graphics removal is handled by MeasurementManager.remove_measurement()
+
+    def _on_handle_moved(self, view_name: str, measurement_id: int, handle_index: int, new_pos: QPointF):
+        """Handle endpoint handle dragging."""
+        if measurement_id not in self.measurement_manager.measurements:
+            return
+            
+        measurement = self.measurement_manager.measurements[measurement_id]
+        view = self.view.slice_views[view_name]
+        
+        # Convert item coordinates back to image coordinates
+        h = view.pixmap_item.pixmap().height()
+        img_x = new_pos.x()
+        img_y = h - 1 - new_pos.y()
+        
+        # Get current slice and axis
+        current_slice = self.model.view_configs[view_name]['slice']
+        axis = self.model.view_configs[view_name]['axis']
+        
+        # Convert to voxel coordinates
+        if axis == 0:  # Sagittal
+            voxel_coords = (float(current_slice), img_x, img_y)
+        elif axis == 1:  # Coronal
+            voxel_coords = (img_x, float(current_slice), img_y)
+        else:  # Axial
+            voxel_coords = (img_x, img_y, float(current_slice))
+        
+        # Update measurement endpoint
+        if handle_index == 0:  # Start point
+            measurement.start_voxel = voxel_coords
+            measurement.start_world = tuple(nib.affines.apply_affine(self.model.image_affine, voxel_coords))
+        else:  # End point
+            measurement.end_voxel = voxel_coords
+            measurement.end_world = tuple(nib.affines.apply_affine(self.model.image_affine, voxel_coords))
+        
+        # Recalculate length
+        measurement.length_mm = np.linalg.norm(np.array(measurement.start_world) - np.array(measurement.end_world))
+        
+        # Update graphics
+        self._update_measurement_graphics(measurement_id, view_name)
+
+    def _on_line_moved(self, view_name: str, measurement_id: int, delta_item: QPointF):
+        """Handle entire line dragging by updating measurement data with boundary constraints."""
+        if measurement_id not in self.measurement_manager.measurements:
+            return
+            
+        measurement = self.measurement_manager.measurements[measurement_id]
+        view = self.view.slice_views[view_name]
+        
+        # Get image boundaries
+        pixmap = view.pixmap_item.pixmap()
+        if pixmap.isNull():
+            return
+        img_width, img_height = pixmap.width(), pixmap.height()
+        
+        # 先把 item 坐标系的位移向量"反旋转"到图像坐标系
+        t_inv, _ = view.pixmap_item.transform().inverted()
+        delta_img_vec = t_inv.map(delta_item)  # 纯旋转，无平移，这里等同于 mapVector
+
+        # 图像是渲染时 flipud 的，所以再做一次 Y 翻转
+        dx_img = delta_img_vec.x()
+        dy_img = -delta_img_vec.y()
+        
+        # Convert current endpoints to image coordinates for boundary checking
+        axis = self.model.view_configs[view_name]['axis']
+        if axis == 0:  # Sagittal
+            p1_img = QPointF(measurement.start_voxel[1], measurement.start_voxel[2])
+            p2_img = QPointF(measurement.end_voxel[1], measurement.end_voxel[2])
+        elif axis == 1:  # Coronal
+            p1_img = QPointF(measurement.start_voxel[0], measurement.start_voxel[2])
+            p2_img = QPointF(measurement.end_voxel[0], measurement.end_voxel[2])
+        else:  # Axial
+            p1_img = QPointF(measurement.start_voxel[0], measurement.start_voxel[1])
+            p2_img = QPointF(measurement.end_voxel[0], measurement.end_voxel[1])
+        
+        # Calculate constrained delta to keep both endpoints within bounds
+        # Find maximum allowable delta in positive direction
+        dx_max_pos = min(img_width - 1 - p1_img.x(), img_width - 1 - p2_img.x())
+        dy_max_pos = min(img_height - 1 - p1_img.y(), img_height - 1 - p2_img.y())
+        
+        # Find maximum allowable delta in negative direction  
+        dx_max_neg = min(p1_img.x(), p2_img.x())
+        dy_max_neg = min(p1_img.y(), p2_img.y())
+        
+        # Clamp delta to keep both points in bounds
+        dx_clamped = max(-dx_max_neg, min(dx_max_pos, dx_img))
+        dy_clamped = max(-dy_max_neg, min(dy_max_pos, dy_img))
+        
+        # Apply constrained delta to voxel coordinates
+        def add_delta(voxel_coords):
+            if axis == 0:  # Sagittal: (slice, x, y)
+                return (voxel_coords[0], voxel_coords[1] + dx_clamped, voxel_coords[2] + dy_clamped)
+            elif axis == 1:  # Coronal: (x, slice, y)
+                return (voxel_coords[0] + dx_clamped, voxel_coords[1], voxel_coords[2] + dy_clamped)
+            else:  # Axial: (x, y, slice)
+                return (voxel_coords[0] + dx_clamped, voxel_coords[1] + dy_clamped, voxel_coords[2])
+        
+        # Update voxel coordinates with consistent boundary constraints
+        measurement.start_voxel = add_delta(measurement.start_voxel)
+        measurement.end_voxel = add_delta(measurement.end_voxel)
+        
+        # Recalculate world coordinates and length
+        measurement.start_world = tuple(nib.affines.apply_affine(self.model.image_affine, measurement.start_voxel))
+        measurement.end_world = tuple(nib.affines.apply_affine(self.model.image_affine, measurement.end_voxel))
+        measurement.length_mm = np.linalg.norm(np.array(measurement.start_world) - np.array(measurement.end_world))
+        
+        # Update graphics using unified data-driven approach
+        self._update_measurement_graphics(measurement_id, view_name)
+
+    def _update_measurement_graphics(self, measurement_id: int, view_name: str):
+        """Update graphics after measurement data change."""
+        if measurement_id not in self.measurement_manager.measurements:
+            return
+            
+        measurement = self.measurement_manager.measurements[measurement_id]
+        view = self.view.slice_views[view_name]
+        
+        # Get current graphics items
+        if view_name not in self.measurement_manager._graphics_items.get(measurement_id, {}):
+            return
+            
+        graphics_items = self.measurement_manager._graphics_items[measurement_id][view_name]
+        if len(graphics_items) < 2:
+            return
+        
+        line_item = graphics_items[0]
+        text_item = graphics_items[1]
+        
+        # Convert voxel coordinates to draw coordinates
+        axis = self.model.view_configs[view_name]['axis']
+        if axis == 0:  # Sagittal
+            p1_img = QPointF(measurement.start_voxel[1], measurement.start_voxel[2])
+            p2_img = QPointF(measurement.end_voxel[1], measurement.end_voxel[2])
+        elif axis == 1:  # Coronal
+            p1_img = QPointF(measurement.start_voxel[0], measurement.start_voxel[2])
+            p2_img = QPointF(measurement.end_voxel[0], measurement.end_voxel[2])
+        else:  # Axial
+            p1_img = QPointF(measurement.start_voxel[0], measurement.start_voxel[1])
+            p2_img = QPointF(measurement.end_voxel[0], measurement.end_voxel[1])
+        
+        # Apply Y-flip for drawing
+        h = view.pixmap_item.pixmap().height()
+        p1_draw = QPointF(p1_img.x(), h - 1 - p1_img.y())
+        p2_draw = QPointF(p2_img.x(), h - 1 - p2_img.y())
+        
+        # Update line geometry
+        line_item.setLine(p1_draw.x(), p1_draw.y(), p2_draw.x(), p2_draw.y())
+        
+        # Update handles positions (if they exist)
+        if len(graphics_items) > 3:  # Has handles
+            handle1 = graphics_items[3]
+            if handle1:
+                handle1.setPos(p1_draw)
+            if len(graphics_items) > 4 and graphics_items[4]:
+                handle2 = graphics_items[4]
+                handle2.setPos(p2_draw)
+        
+        # Update text content and position
+        text_item.setText(f"{measurement.length_mm:.2f} mm")
+        # Apply reverse rotation to keep text upright
+        rotation = self.model.view_configs[view_name]['rotation']
+        text_item.setRotation(-rotation)
+        line_center = QPointF((p1_draw.x() + p2_draw.x()) / 2, (p1_draw.y() + p2_draw.y()) / 2)
+        new_text_pos = self._calculate_text_position(view, p1_draw, p2_draw, text_item, measurement)
+        text_item.setPos(new_text_pos)
+        
+        # Update or create arrow if needed - safe array access
+        arrow_item = None
+        if len(graphics_items) > 2 and graphics_items[2]:
+            arrow_item = graphics_items[2]
+        distance_from_center = ((new_text_pos.x() - line_center.x()) ** 2 + 
+                               (new_text_pos.y() - line_center.y()) ** 2) ** 0.5
+        
+        if distance_from_center > 8:
+            if not arrow_item:
+                # Create new arrow
+                arrow_item = self._create_arrow_annotation(text_item, p1_draw, p2_draw, measurement)
+                if arrow_item:
+                    # Ensure graphics_items has enough elements
+                    while len(graphics_items) <= 2:
+                        graphics_items.append(None)
+                    graphics_items[2] = arrow_item
+            else:
+                # Update existing arrow (recreate for simplicity)
+                if arrow_item.scene():
+                    arrow_item.scene().removeItem(arrow_item)
+                arrow_item = self._create_arrow_annotation(text_item, p1_draw, p2_draw, measurement)
+                if arrow_item:
+                    # Ensure graphics_items has enough elements
+                    while len(graphics_items) <= 2:
+                        graphics_items.append(None)
+                    graphics_items[2] = arrow_item
+        else:
+            # Remove arrow if too close
+            if arrow_item and arrow_item.scene():
+                arrow_item.scene().removeItem(arrow_item)
+                # Ensure graphics_items has enough elements
+                while len(graphics_items) <= 2:
+                    graphics_items.append(None)
+                graphics_items[2] = None
 
     def delete_selected_measurement(self):
         """Delete the currently selected measurement."""

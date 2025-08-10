@@ -684,7 +684,7 @@ class MeasurementManager(QObject):
         # Joint nodes tracking: (view_name, slice_idx, key_x, key_y) -> Set[(measurement_id, handle_index)]
         # Enables endpoint snapping and linked movement
         self.joints: Dict[Tuple[str, int, int, int], set] = {}
-        self.snap_distance = 6  # Pixel distance for joint clustering
+        self.snap_distance = 12  # Pixel distance for joint clustering
 
         # Measurement display settings
         self.line_width = 1
@@ -1280,7 +1280,7 @@ class SliceView(QGraphicsView):
         
         # Snap system properties
         self.snap_enabled = True
-        self.snap_distance = 6  # pixels for screen-space constant snapping
+        self.snap_distance = 12  # pixels for screen-space constant snapping
         self._snap_preview_item = None
         self._current_snap_point = None
         
@@ -1484,7 +1484,11 @@ class SliceView(QGraphicsView):
         # Use item coordinates for consistent comparison
         mouse_img = self.map_view_to_image_coords(mouse_pos)
         nearest_point = None
-        min_distance = self.snap_distance
+        
+        # Calculate screen-space constant snap distance
+        scale = self.transform().m11()
+        effective_snap_distance = self.snap_distance / max(scale, 1e-6)
+        min_distance = effective_snap_distance
         
         if not hasattr(self.pixmap_item, 'pixmap') or self.pixmap_item.pixmap().isNull():
             return None
@@ -1986,7 +1990,7 @@ class MainWindow(QMainWindow):
         snap_settings_layout.addWidget(QLabel("Snap Distance:"), 1, 0)
         self.snap_distance_spinbox = QDoubleSpinBox()
         self.snap_distance_spinbox.setRange(3.0, 20.0)  # 3 to 20 pixels (smaller range)
-        self.snap_distance_spinbox.setValue(6.0)  # Default 6 pixels for good snap feel
+        self.snap_distance_spinbox.setValue(12.0)  # Default 12 pixels for good snap feel
         self.snap_distance_spinbox.setSingleStep(1.0)
         self.snap_distance_spinbox.setDecimals(0)
         self.snap_distance_spinbox.setSuffix(" px")
@@ -2551,9 +2555,8 @@ class ViewerController(QObject):
         font.setWeight(measurement.text_font_weight)
         text.setFont(font)
         
-        # Text uses reverse rotation to stay upright (maintains coordinate system consistency)
-        rotation = self.model.view_configs[view_name]['rotation']
-        text.setRotation(-rotation)
+        # Text ignores transformations to stay upright and maintain constant size
+        text.setFlag(QGraphicsItem.ItemIgnoresTransformations, True)
         
         # Use intelligent text positioning with collision avoidance and persistence
         line_center = QPointF((p1_draw.x() + p2_draw.x()) / 2, (p1_draw.y() + p2_draw.y()) / 2)
@@ -2802,11 +2805,11 @@ class ViewerController(QObject):
                 
         return False
     
-    def _create_arrow_annotation(self, text_item, p1_draw, p2_draw, measurement):
-        """Create precise arrow pointing from line to text edge using geometric intersection."""
+    def _create_arrow_path(self, text_item, p1_draw, p2_draw, measurement):
+        """Create arrow path from line center to text, returns path only."""
         line_center = QPointF((p1_draw.x() + p2_draw.x())/2, (p1_draw.y() + p2_draw.y())/2)
-
-        # 文字的包围盒（父坐标：pixmap_item）
+        
+        # 文字矩形（以父坐标系）
         text_rect_parent = text_item.mapRectToParent(text_item.boundingRect())
         text_center = text_rect_parent.center()
 
@@ -2814,7 +2817,7 @@ class ViewerController(QObject):
         v = QPointF(text_center.x() - line_center.x(), text_center.y() - line_center.y())
         L = (v.x()**2 + v.y()**2) ** 0.5
         if L == 0:
-            return None
+            return QPainterPath()  # Empty path if no direction
         u = QPointF(v.x()/L, v.y()/L)
 
         # 与文字矩形求交，得到"触碰点"
@@ -2835,6 +2838,14 @@ class ViewerController(QObject):
         path.lineTo(p1)
         path.moveTo(end)
         path.lineTo(p2)
+
+        return path
+
+    def _create_arrow_annotation(self, text_item, p1_draw, p2_draw, measurement):
+        """Create precise arrow pointing from line to text edge using geometric intersection."""
+        path = self._create_arrow_path(text_item, p1_draw, p2_draw, measurement)
+        if not path or path.isEmpty():
+            return None
 
         item = QGraphicsPathItem(path, parent=text_item.parentItem())  # == pixmap_item
         pen = QPen(measurement.text_color, max(1.0, measurement.line_width*0.9))
@@ -3237,8 +3248,8 @@ class ViewerController(QObject):
         
         # Calculate constrained delta to keep both endpoints within bounds
         # Find maximum allowable delta in positive direction
-        dx_max_pos = min(img_width - 1 - p1_img.x(), img_width - 1 - p2_img.x())
-        dy_max_pos = min(img_height - 1 - p1_img.y(), img_height - 1 - p2_img.y())
+        dx_max_pos = min(img_width - p1_img.x(), img_width - p2_img.x())
+        dy_max_pos = min(img_height - p1_img.y(), img_height - p2_img.y())
         
         # Find maximum allowable delta in negative direction  
         dx_max_neg = min(p1_img.x(), p2_img.x())
@@ -3339,9 +3350,8 @@ class ViewerController(QObject):
         
         # Update text content and position
         text_item.setText(f"{measurement.length_mm:.2f} mm")
-        # Apply reverse rotation to keep text upright
-        rotation = self.model.view_configs[view_name]['rotation']
-        text_item.setRotation(-rotation)
+        # Ensure text ignores transformations to stay upright and maintain constant size
+        text_item.setFlag(QGraphicsItem.ItemIgnoresTransformations, True)
         line_center = QPointF((p1_draw.x() + p2_draw.x()) / 2, (p1_draw.y() + p2_draw.y()) / 2)
         new_text_pos = self._calculate_text_position(view, p1_draw, p2_draw, text_item, measurement)
         text_item.setPos(new_text_pos)
@@ -3353,33 +3363,19 @@ class ViewerController(QObject):
         distance_from_center = ((new_text_pos.x() - line_center.x()) ** 2 + 
                                (new_text_pos.y() - line_center.y()) ** 2) ** 0.5
         
+        # Remove old arrow if it exists
+        if arrow_item and arrow_item.scene():
+            arrow_item.scene().removeItem(arrow_item)
+        
+        # Create new arrow if needed (rebuild and backfill strategy)
+        new_arrow_item = None
         if distance_from_center > 8:
-            if not arrow_item:
-                # Create new arrow
-                arrow_item = self._create_arrow_annotation(text_item, p1_draw, p2_draw, measurement)
-                if arrow_item:
-                    # Ensure graphics_items has enough elements
-                    while len(graphics_items) <= 2:
-                        graphics_items.append(None)
-                    graphics_items[2] = arrow_item
-            else:
-                # Update existing arrow (recreate for simplicity)
-                if arrow_item.scene():
-                    arrow_item.scene().removeItem(arrow_item)
-                arrow_item = self._create_arrow_annotation(text_item, p1_draw, p2_draw, measurement)
-                if arrow_item:
-                    # Ensure graphics_items has enough elements
-                    while len(graphics_items) <= 2:
-                        graphics_items.append(None)
-                    graphics_items[2] = arrow_item
-        else:
-            # Remove arrow if too close
-            if arrow_item and arrow_item.scene():
-                arrow_item.scene().removeItem(arrow_item)
-                # Ensure graphics_items has enough elements
-                while len(graphics_items) <= 2:
-                    graphics_items.append(None)
-                graphics_items[2] = None
+            new_arrow_item = self._create_arrow_annotation(text_item, p1_draw, p2_draw, measurement)
+        
+        # Ensure graphics_items has enough elements and backfill arrow at index 2
+        while len(graphics_items) <= 2:
+            graphics_items.append(None)
+        graphics_items[2] = new_arrow_item
 
     def delete_selected_measurement(self):
         """Delete the currently selected measurement."""

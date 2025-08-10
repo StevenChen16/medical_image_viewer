@@ -780,16 +780,17 @@ class MeasurementManager(QObject):
         for key in keys_to_remove:
             del self.joints[key]
     
-    def _find_nearby_joint(self, view_name: str, slice_idx: int, pos: tuple) -> Tuple[str, int, int, int]:
+    def _find_nearby_joint(self, view_name: str, slice_idx: int, pos: tuple, effective_snap_distance: float = None) -> Tuple[str, int, int, int]:
         """Find existing joint within snap distance, or None."""
         x, y = pos
+        snap_distance = effective_snap_distance if effective_snap_distance is not None else self.snap_distance
         for joint_key in self.joints.keys():
             if joint_key[0] != view_name or joint_key[1] != slice_idx:
                 continue
             
             key_x, key_y = joint_key[2], joint_key[3]
             distance = ((x - key_x) ** 2 + (y - key_y) ** 2) ** 0.5
-            if distance <= self.snap_distance:
+            if distance <= snap_distance:
                 return joint_key
         return None
 
@@ -1279,7 +1280,7 @@ class SliceView(QGraphicsView):
         
         # Snap system properties
         self.snap_enabled = True
-        self.snap_distance = 6  # pixels (match circle size)
+        self.snap_distance = 6  # pixels for screen-space constant snapping
         self._snap_preview_item = None
         self._current_snap_point = None
         
@@ -1985,7 +1986,7 @@ class MainWindow(QMainWindow):
         snap_settings_layout.addWidget(QLabel("Snap Distance:"), 1, 0)
         self.snap_distance_spinbox = QDoubleSpinBox()
         self.snap_distance_spinbox.setRange(3.0, 20.0)  # 3 to 20 pixels (smaller range)
-        self.snap_distance_spinbox.setValue(6.0)  # Default 6 pixels (match circle size)
+        self.snap_distance_spinbox.setValue(6.0)  # Default 6 pixels for good snap feel
         self.snap_distance_spinbox.setSingleStep(1.0)
         self.snap_distance_spinbox.setDecimals(0)
         self.snap_distance_spinbox.setSuffix(" px")
@@ -3084,55 +3085,121 @@ class ViewerController(QObject):
                     old_joint_key = joint_key
                 break
         
-        # Check for snapping to existing joints (unless disabled by Ctrl key)
-        snapped_pos = (img_x, img_y)
+        # Check UI snap enable setting
+        if not view.snap_enabled:
+            disable_snapping = True
+        
+        # Calculate screen-space constant snap distance
+        scale = view.transform().m11()
+        effective_snap_distance = self.measurement_manager.snap_distance / max(scale, 1e-6)
+        
+        # Check for snapping to existing joints (unless disabled by Ctrl key or UI setting)
         target_joint_key = None
+        anchor_voxel_coords = None
         
         if not disable_snapping:
-            nearby_joint = self.measurement_manager._find_nearby_joint(view_name, current_slice, (img_x, img_y))
+            nearby_joint = self.measurement_manager._find_nearby_joint(view_name, current_slice, (img_x, img_y), effective_snap_distance)
             if nearby_joint:
-                # Snap to existing joint
+                # Snap to existing joint using anchor strategy
                 target_joint_key = nearby_joint
-                snapped_pos = (nearby_joint[2], nearby_joint[3])  # Use joint's key coordinates
+                
+                # Find an anchor point from existing joint members
+                members = list(self.measurement_manager.joints[target_joint_key])
+                if members:
+                    # Use the first existing member as anchor (prefer different measurement)
+                    anchor_measurement_id, anchor_handle_index = members[0]
+                    # Try to find a different measurement if possible
+                    for mid, hidx in members:
+                        if mid != measurement_id:
+                            anchor_measurement_id, anchor_handle_index = mid, hidx
+                            break
+                    
+                    anchor_measurement = self.measurement_manager.measurements[anchor_measurement_id]
+                    if anchor_handle_index == 0:  # Start point
+                        anchor_voxel_coords = anchor_measurement.start_voxel
+                    else:  # End point
+                        anchor_voxel_coords = anchor_measurement.end_voxel
         
-        # If no snapping, create new joint at current position
+        # If no snapping to existing joint, try endpoint-to-line-segment snapping
+        if target_joint_key is None and not disable_snapping:
+            closest_line_point = None
+            min_line_distance = effective_snap_distance
+            
+            # Check all measurements on current slice (except current one)
+            for other_measurement in self.measurement_manager.measurements.values():
+                if (other_measurement.id == measurement_id or 
+                    other_measurement.view_name != view_name or 
+                    other_measurement.slice_idx != current_slice):
+                    continue
+                
+                # Get line segment endpoints in image coordinates
+                if axis == 0:  # Sagittal
+                    p1_img = QPointF(other_measurement.start_voxel[1], other_measurement.start_voxel[2])
+                    p2_img = QPointF(other_measurement.end_voxel[1], other_measurement.end_voxel[2])
+                elif axis == 1:  # Coronal
+                    p1_img = QPointF(other_measurement.start_voxel[0], other_measurement.start_voxel[2])
+                    p2_img = QPointF(other_measurement.end_voxel[0], other_measurement.end_voxel[2])
+                else:  # Axial
+                    p1_img = QPointF(other_measurement.start_voxel[0], other_measurement.start_voxel[1])
+                    p2_img = QPointF(other_measurement.end_voxel[0], other_measurement.end_voxel[1])
+                
+                # Find closest point on line segment to current endpoint
+                current_point = QPointF(img_x, img_y)
+                closest_on_segment = self._intersect_ray_with_line(current_point, QPointF(0, 0), p1_img, p2_img)
+                
+                # Calculate distance
+                distance = ((current_point.x() - closest_on_segment.x()) ** 2 + 
+                           (current_point.y() - closest_on_segment.y()) ** 2) ** 0.5
+                
+                if distance < min_line_distance:
+                    min_line_distance = distance
+                    closest_line_point = closest_on_segment
+            
+            # If found a close line segment, snap to it
+            if closest_line_point is not None:
+                # Convert closest point to voxel coordinates
+                if axis == 0:  # Sagittal
+                    anchor_voxel_coords = (float(current_slice), closest_line_point.x(), closest_line_point.y())
+                elif axis == 1:  # Coronal
+                    anchor_voxel_coords = (closest_line_point.x(), float(current_slice), closest_line_point.y())
+                else:  # Axial
+                    anchor_voxel_coords = (closest_line_point.x(), closest_line_point.y(), float(current_slice))
+                
+                # Create joint at snapped position
+                target_joint_key = self.measurement_manager._get_joint_key(view_name, current_slice, 
+                                                                        (closest_line_point.x(), closest_line_point.y()))
+        
+        # If still no snapping, create new joint at current position
         if target_joint_key is None:
-            target_joint_key = self.measurement_manager._get_joint_key(view_name, current_slice, snapped_pos)
+            # Convert current position to voxel coordinates for new joint
+            if axis == 0:  # Sagittal
+                anchor_voxel_coords = (float(current_slice), img_x, img_y)
+            elif axis == 1:  # Coronal
+                anchor_voxel_coords = (img_x, float(current_slice), img_y)
+            else:  # Axial
+                anchor_voxel_coords = (img_x, img_y, float(current_slice))
+            
+            # Create new joint key for current position
+            target_joint_key = self.measurement_manager._get_joint_key(view_name, current_slice, (img_x, img_y))
         
         # Register current endpoint to target joint
         if target_joint_key not in self.measurement_manager.joints:
             self.measurement_manager.joints[target_joint_key] = set()
         self.measurement_manager.joints[target_joint_key].add((measurement_id, handle_index))
         
-        # Convert snapped position to voxel coordinates
-        snap_x, snap_y = snapped_pos
-        if axis == 0:  # Sagittal
-            voxel_coords = (float(current_slice), snap_x, snap_y)
-        elif axis == 1:  # Coronal
-            voxel_coords = (snap_x, float(current_slice), snap_y)
-        else:  # Axial
-            voxel_coords = (snap_x, snap_y, float(current_slice))
+        # Update ONLY the current measurement endpoint to anchor position
+        if handle_index == 0:  # Start point
+            measurement.start_voxel = anchor_voxel_coords
+            measurement.start_world = tuple(nib.affines.apply_affine(self.model.image_affine, anchor_voxel_coords))
+        else:  # End point
+            measurement.end_voxel = anchor_voxel_coords
+            measurement.end_world = tuple(nib.affines.apply_affine(self.model.image_affine, anchor_voxel_coords))
         
-        # Update all linked endpoints to the same position
-        linked_measurements = set()
-        for linked_measurement_id, linked_handle_index in self.measurement_manager.joints[target_joint_key]:
-            linked_measurements.add(linked_measurement_id)
-            linked_measurement = self.measurement_manager.measurements[linked_measurement_id]
-            
-            # Update the linked endpoint
-            if linked_handle_index == 0:  # Start point
-                linked_measurement.start_voxel = voxel_coords
-                linked_measurement.start_world = tuple(nib.affines.apply_affine(self.model.image_affine, voxel_coords))
-            else:  # End point
-                linked_measurement.end_voxel = voxel_coords
-                linked_measurement.end_world = tuple(nib.affines.apply_affine(self.model.image_affine, voxel_coords))
-            
-            # Recalculate length
-            linked_measurement.length_mm = np.linalg.norm(np.array(linked_measurement.start_world) - np.array(linked_measurement.end_world))
+        # Recalculate length for current measurement only
+        measurement.length_mm = np.linalg.norm(np.array(measurement.start_world) - np.array(measurement.end_world))
         
-        # Update graphics for all affected measurements
-        for linked_measurement_id in linked_measurements:
-            self._update_measurement_graphics(linked_measurement_id, view_name)
+        # Update graphics for current measurement only
+        self._update_measurement_graphics(measurement_id, view_name)
 
     def _on_line_moved(self, view_name: str, measurement_id: int, delta_item: QPointF):
         """Handle entire line dragging by updating measurement data with boundary constraints."""

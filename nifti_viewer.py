@@ -947,6 +947,7 @@ class EndpointHandle(QGraphicsEllipseItem):
         # Enable dragging
         self.setFlag(QGraphicsItem.ItemIsMovable, True)
         self.setFlag(QGraphicsItem.ItemSendsScenePositionChanges, True)
+        self.setFlag(QGraphicsItem.ItemIgnoresTransformations, True)  # 端点恒定屏幕大小
         self.setCursor(Qt.OpenHandCursor)
         
         # For Ctrl key detection to disable snapping
@@ -1375,7 +1376,9 @@ class SliceView(QGraphicsView):
 
             line = QGraphicsLineItem(start_img_pos.x(), start_draw_y,
                                      start_img_pos.x(), start_draw_y, parent=self.pixmap_item)
-            line.setPen(QPen(QColor(255, 255, 0), 2))
+            temp_pen = QPen(QColor(255, 255, 0), 2)
+            temp_pen.setCosmetic(True)  # 临时线条也恒定粗细
+            line.setPen(temp_pen)
             self._measure_temp_item = line
         elif event.button() == Qt.LeftButton and self.measure_mode == 'erase':
             # Delete measurement under cursor
@@ -1538,11 +1541,15 @@ class SliceView(QGraphicsView):
             
             # Create snap preview circle (radius matches handle radius) as child of pixmap_item
             radius = 5  # Match handle radius
+            # 以原点为中心创建，再用setPos定位，配合ItemIgnoresTransformations
             self._snap_preview_item = QGraphicsEllipseItem(
-                item_point.x() - radius, item_point.y() - radius, 
-                radius * 2, radius * 2, parent=self.pixmap_item
+                -radius, -radius, radius * 2, radius * 2, parent=self.pixmap_item
             )
-            self._snap_preview_item.setPen(QPen(QColor(255, 255, 0, 200), 2))  # Yellow with transparency
+            self._snap_preview_item.setPos(item_point)
+            self._snap_preview_item.setFlag(QGraphicsItem.ItemIgnoresTransformations, True)  # 恒定屏幕大小
+            pen = QPen(QColor(255, 255, 0, 200), 2)
+            pen.setCosmetic(True)  # 描边也恒定粗细
+            self._snap_preview_item.setPen(pen)
             self._snap_preview_item.setBrush(QBrush(QColor(255, 255, 0, 100)))  # Semi-transparent fill
     
     def _clear_snap_preview(self):
@@ -1647,14 +1654,18 @@ class SliceView(QGraphicsView):
                 # Highlight line with bright outline
                 current_pen = item.pen()
                 highlight_pen = QPen(highlight_color, current_pen.widthF() + highlight_width)
+                highlight_pen.setCosmetic(True)  # 高亮线条也恒定粗细
                 item.setPen(highlight_pen)
             elif isinstance(item, QGraphicsSimpleTextItem):
                 # Highlight text with bright outline
-                item.setPen(QPen(highlight_color, highlight_width))
+                text_pen = QPen(highlight_color, highlight_width)
+                text_pen.setCosmetic(True)  # 文字描边也恒定粗细
+                item.setPen(text_pen)
             elif isinstance(item, QGraphicsPathItem):
                 # Highlight arrow with bright outline  
                 current_pen = item.pen()
                 highlight_pen = QPen(highlight_color, current_pen.widthF() + 1.0)
+                highlight_pen.setCosmetic(True)  # 高亮箭头也恒定粗细
                 item.setPen(highlight_pen)
     
     def _clear_measurement_highlights(self):
@@ -1674,6 +1685,7 @@ class SliceView(QGraphicsView):
                         if isinstance(item, QGraphicsLineItem):
                             # Restore original line style
                             original_pen = QPen(measurement.line_color, measurement.line_width)
+                            original_pen.setCosmetic(True)  # 恢复时也保持恒定粗细
                             item.setPen(original_pen)
                         elif isinstance(item, QGraphicsSimpleTextItem):
                             # Clear text outline
@@ -1681,6 +1693,7 @@ class SliceView(QGraphicsView):
                         elif isinstance(item, QGraphicsPathItem):
                             # Restore elegant arrow style using measurement's text color
                             original_pen = QPen(measurement.text_color, max(1.0, measurement.line_width*0.9))
+                            original_pen.setCosmetic(True)  # 恢复时也保持恒定粗细
                             item.setPen(original_pen)
         
         self._currently_highlighted_measurement_id = None
@@ -2521,7 +2534,9 @@ class ViewerController(QObject):
         # Create draggable line graphics item as child of pixmap_item
         line_geom = QLineF(p1_draw.x(), p1_draw.y(), p2_draw.x(), p2_draw.y())
         line = DraggableLine(line_geom, measurement.id, self, view_name, parent=view.pixmap_item)
-        line.setPen(QPen(measurement.line_color, measurement.line_width))
+        pen = QPen(measurement.line_color, measurement.line_width)
+        pen.setCosmetic(True)  # 关键：线宽按屏幕像素，不随缩放改变
+        line.setPen(pen)
         line.setData(0, measurement.id)  # Store measurement ID
         line.setFlag(QGraphicsLineItem.ItemIsSelectable, True)
         line.setZValue(1)  # Base layer for lines
@@ -2821,7 +2836,9 @@ class ViewerController(QObject):
         path.lineTo(p2)
 
         item = QGraphicsPathItem(path, parent=text_item.parentItem())  # == pixmap_item
-        item.setPen(QPen(measurement.text_color, max(1.0, measurement.line_width*0.9)))
+        pen = QPen(measurement.text_color, max(1.0, measurement.line_width*0.9))
+        pen.setCosmetic(True)  # 箭头恒定粗细，不随缩放改变
+        item.setPen(pen)
         item.setZValue(1.5)  # Arrows between lines and text
         item.setData(0, measurement.id)
         item.setFlag(QGraphicsItem.ItemIsSelectable, True)

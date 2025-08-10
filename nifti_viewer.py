@@ -1350,6 +1350,14 @@ class SliceView(QGraphicsView):
             # Zoom with Ctrl+Wheel
             zoom_factor = 1.15 if event.angleDelta().y() > 0 else 1.0 / 1.15
             self.scale(zoom_factor, zoom_factor)
+            
+            # Force recalculate measurements after scaling
+            # Text uses ItemIgnoresTransformations (constant screen size),
+            # but arrows need to be recalculated for the new scaling
+            if hasattr(self, 'controller') and self.controller:
+                if hasattr(self.controller, 'model') and self.controller.model:
+                    slice_idx = self.controller.model.view_configs[self.view_name]['slice']
+                    self.controller.measurement_manager.update_measurement_display(self.view_name, slice_idx, self.controller)
         else:
             # Slice navigation with plain wheel
             delta = 1 if event.angleDelta().y() > 0 else -1
@@ -2566,11 +2574,15 @@ class ViewerController(QObject):
         text.setFlag(QGraphicsSimpleTextItem.ItemIsSelectable, True)
         text.setZValue(2)  # Text above lines
         
-        # Add arrow only if text is significantly displaced from line center
+        # Add arrow only if text is significantly displaced from line segment
         arrow_item = None
-        distance_from_center = ((text_pos.x() - line_center.x()) ** 2 + 
-                               (text_pos.y() - line_center.y()) ** 2) ** 0.5
-        if distance_from_center > 8:  # Small threshold - since text is much closer now
+        # Calculate distance from text center to line segment (screen-space threshold)
+        scale = view.transform().m11()
+        threshold_px = 18  # Screen pixels - only show arrow if text is far from line
+        threshold_item = threshold_px / max(scale, 1e-6)
+        
+        distance_to_line = self._distance_point_to_segment(p1_draw, p2_draw, text_pos)
+        if distance_to_line > threshold_item:
             arrow_item = self._create_arrow_annotation(text, p1_draw, p2_draw, measurement)
         
         # Create endpoint handles for dragging
@@ -2805,36 +2817,127 @@ class ViewerController(QObject):
                 
         return False
     
-    def _create_arrow_path(self, text_item, p1_draw, p2_draw, measurement):
-        """Create arrow path from line center to text, returns path only."""
-        line_center = QPointF((p1_draw.x() + p2_draw.x())/2, (p1_draw.y() + p2_draw.y())/2)
+    def _closest_point_on_segment(self, p1: QPointF, p2: QPointF, point: QPointF) -> QPointF:
+        """Find the closest point on line segment p1-p2 to the given point."""
+        # Vector from p1 to p2
+        segment = QPointF(p2.x() - p1.x(), p2.y() - p1.y())
+        # Vector from p1 to point
+        to_point = QPointF(point.x() - p1.x(), point.y() - p1.y())
         
-        # 文字矩形（以父坐标系）
-        text_rect_parent = text_item.mapRectToParent(text_item.boundingRect())
-        text_center = text_rect_parent.center()
+        # Length squared of segment
+        segment_length_sq = segment.x() * segment.x() + segment.y() * segment.y()
+        
+        if segment_length_sq == 0:
+            # p1 and p2 are the same point
+            return p1
+        
+        # Project to_point onto segment
+        t = (to_point.x() * segment.x() + to_point.y() * segment.y()) / segment_length_sq
+        
+        # Clamp t to [0, 1] to stay within segment
+        t = max(0.0, min(1.0, t))
+        
+        # Return the closest point on segment
+        return QPointF(p1.x() + t * segment.x(), p1.y() + t * segment.y())
+    
+    def _distance_point_to_segment(self, p1: QPointF, p2: QPointF, point: QPointF) -> float:
+        """Calculate the shortest distance from a point to a line segment."""
+        closest = self._closest_point_on_segment(p1, p2, point)
+        dx = point.x() - closest.x()
+        dy = point.y() - closest.y()
+        return (dx * dx + dy * dy) ** 0.5
+    
+    def _create_arrow_path(self, text_item, p1_draw, p2_draw, measurement):
+        """Create arrow path from closest point on line to text, with screen-space consistent geometry."""
+        view = self.view.slice_views[measurement.view_name]
+        pixmap_item = view.pixmap_item
+        
+        # 关键：用设备坐标得到真实绘制的文字矩形
+        # 文字使用ItemIgnoresTransformations，实际渲染在设备空间，需要准确映射
+        
+        # 文本左上角场景坐标
+        tl_scene = text_item.mapToScene(QPointF(0, 0))
+        # 转到视图坐标（像素）
+        tl_view = view.mapFromScene(tl_scene)
 
+        # 用QFontMetricsF得到屏幕像素级的文字宽高
+        metrics = QFontMetricsF(text_item.font())
+        w = metrics.horizontalAdvance(text_item.text())
+        h = metrics.height()
+
+        # 视图坐标里的文字矩形 -> 场景坐标
+        br_view = QPoint(int(tl_view.x() + w), int(tl_view.y() + h))
+        tl_scene2 = view.mapToScene(QPoint(int(tl_view.x()), int(tl_view.y())))
+        br_scene2 = view.mapToScene(br_view)
+        scene_rect_visual = QRectF(tl_scene2, br_scene2).normalized()
+
+        # 再把"真实矩形"映射到 pixmap_item 坐标（与线/箭头同系）
+        text_rect = pixmap_item.mapRectFromScene(scene_rect_visual)
+        text_center = text_rect.center()
+        
+        # 找到线段上离文字最近的点作为箭头起点（而不是固定的线段中心）
+        closest_on_line = self._closest_point_on_segment(p1_draw, p2_draw, text_center)
+        
+        # 端点缓冲区：避免箭头从端点发射，造成视觉混乱
+        seg = QPointF(p2_draw.x() - p1_draw.x(), p2_draw.y() - p1_draw.y())
+        seg_len = (seg.x()**2 + seg.y()**2) ** 0.5
+        
+        if seg_len > 0:
+            line_unit = QPointF(seg.x()/seg_len, seg.y()/seg_len)
+            scale = view.transform().m11()
+            margin_px = 15  # 端点缓冲（屏幕像素，确保箭头明显远离端点）
+            margin_item = margin_px / max(scale, 1e-6)
+            
+            # 若落在端点缓冲内，往线段内部推开
+            d1 = ((closest_on_line.x()-p1_draw.x())**2 + (closest_on_line.y()-p1_draw.y())**2) ** 0.5
+            d2 = ((closest_on_line.x()-p2_draw.x())**2 + (closest_on_line.y()-p2_draw.y())**2) ** 0.5
+            
+            if d1 < margin_item and seg_len > 2*margin_item:
+                # 太靠近p1端点，往内部推开
+                closest_on_line = QPointF(p1_draw.x() + line_unit.x()*margin_item,
+                                          p1_draw.y() + line_unit.y()*margin_item)
+            elif d2 < margin_item and seg_len > 2*margin_item:
+                # 太靠近p2端点，往内部推开
+                closest_on_line = QPointF(p2_draw.x() - line_unit.x()*margin_item,
+                                          p2_draw.y() - line_unit.y()*margin_item)
+            elif seg_len <= 2*margin_item:
+                # 线段太短：用中点，避免贴端点
+                closest_on_line = QPointF((p1_draw.x()+p2_draw.x())/2, (p1_draw.y()+p2_draw.y())/2)
+        
         # 指向文字中心的单位向量
-        v = QPointF(text_center.x() - line_center.x(), text_center.y() - line_center.y())
+        v = QPointF(text_center.x() - closest_on_line.x(), text_center.y() - closest_on_line.y())
         L = (v.x()**2 + v.y()**2) ** 0.5
         if L == 0:
             return QPainterPath()  # Empty path if no direction
         u = QPointF(v.x()/L, v.y()/L)
 
         # 与文字矩形求交，得到"触碰点"
-        hit = self._intersect_ray_with_rect(line_center, u, text_rect_parent)
-
-        # 起止点：离线中心稍微留个缝，再把终点往回缩一点，避免画进文字
-        start = QPointF(line_center.x() + u.x()*6, line_center.y() + u.y()*6)
-        end   = QPointF(hit.x() - u.x()*2,        hit.y() - u.y()*2)
+        hit = self._intersect_ray_with_rect(closest_on_line, u, text_rect)
+        
+        # 屏幕像素等效的几何尺寸（随缩放自适应）
+        scale = view.transform().m11()  # 当前缩放因子
+        gap_px = 6  # 期望的屏幕像素间距
+        head_len_px = 8  # 期望的屏幕像素箭头头长
+        pad_px = 2  # 期望的屏幕像素退让距离
+        
+        # 转换为item坐标下的尺寸
+        gap_item = gap_px / max(scale, 1e-6)
+        head_len_item = head_len_px / max(scale, 1e-6)
+        pad_item = pad_px / max(scale, 1e-6)
+        
+        # 起止点：从最近点出发，终点退让确保不穿过文字
+        start = QPointF(closest_on_line.x() + u.x()*gap_item, closest_on_line.y() + u.y()*gap_item)
+        end   = QPointF(hit.x() - u.x()*(head_len_item + pad_item), hit.y() - u.y()*(head_len_item + pad_item))
 
         path = QPainterPath(start)
         path.lineTo(end)
         
-        # 箭头三角
+        # 箭头三角（使用屏幕像素等效尺寸）
         perp = QPointF(-u.y(), u.x())
-        head_len, head_w = 6, 3
-        p1 = QPointF(end.x() - u.x()*head_len + perp.x()*head_w, end.y() - u.y()*head_len + perp.y()*head_w)
-        p2 = QPointF(end.x() - u.x()*head_len - perp.x()*head_w, end.y() - u.y()*head_len - perp.y()*head_w)
+        head_w_px = 4  # 期望的屏幕像素箭头头部宽度
+        head_w_item = head_w_px / max(scale, 1e-6)
+        p1 = QPointF(end.x() - u.x()*head_len_item + perp.x()*head_w_item, end.y() - u.y()*head_len_item + perp.y()*head_w_item)
+        p2 = QPointF(end.x() - u.x()*head_len_item - perp.x()*head_w_item, end.y() - u.y()*head_len_item - perp.y()*head_w_item)
         path.lineTo(p1)
         path.moveTo(end)
         path.lineTo(p2)
@@ -3042,11 +3145,14 @@ class ViewerController(QObject):
                 reserved_rect = text_rect.adjusted(-margin, -margin, margin, margin)
                 occupied_rects.append(reserved_rect)
                 
-                # Create new arrow if needed (only for far displacements)
-                distance_from_center = ((new_text_pos.x() - line_center.x()) ** 2 + 
-                                       (new_text_pos.y() - line_center.y()) ** 2) ** 0.5
+                # Create new arrow if needed (only for far displacements from line segment)
+                scale = view.transform().m11()
+                threshold_px = 18  # Screen pixels - consistent with creation threshold
+                threshold_item = threshold_px / max(scale, 1e-6)
+                
+                distance_to_line = self._distance_point_to_segment(p1, p2, new_text_pos)
                 new_arrow_item = None
-                if distance_from_center > 8:
+                if distance_to_line > threshold_item:
                     new_arrow_item = self._create_arrow_annotation(text_item, p1, p2, measurement)
                 
                 # Update graphics items tracking
@@ -3360,22 +3466,41 @@ class ViewerController(QObject):
         arrow_item = None
         if len(graphics_items) > 2 and graphics_items[2]:
             arrow_item = graphics_items[2]
-        distance_from_center = ((new_text_pos.x() - line_center.x()) ** 2 + 
-                               (new_text_pos.y() - line_center.y()) ** 2) ** 0.5
         
-        # Remove old arrow if it exists
-        if arrow_item and arrow_item.scene():
-            arrow_item.scene().removeItem(arrow_item)
+        # Check if arrow is needed based on distance to line segment (screen-space threshold)
+        scale = view.transform().m11()
+        threshold_px = 18  # Screen pixels - consistent with other thresholds
+        threshold_item = threshold_px / max(scale, 1e-6)
         
-        # Create new arrow if needed (rebuild and backfill strategy)
-        new_arrow_item = None
-        if distance_from_center > 8:
-            new_arrow_item = self._create_arrow_annotation(text_item, p1_draw, p2_draw, measurement)
+        distance_to_line = self._distance_point_to_segment(p1_draw, p2_draw, new_text_pos)
         
-        # Ensure graphics_items has enough elements and backfill arrow at index 2
-        while len(graphics_items) <= 2:
-            graphics_items.append(None)
-        graphics_items[2] = new_arrow_item
+        # Create new arrow path if needed
+        new_path = None
+        if distance_to_line > threshold_item:
+            new_path = self._create_arrow_path(text_item, p1_draw, p2_draw, measurement)
+        
+        # Update existing arrow or create new one
+        if len(graphics_items) > 2 and graphics_items[2]:
+            if new_path is None or new_path.isEmpty():
+                # Have old arrow but new rules don't need it -> remove and clear
+                if arrow_item.scene():
+                    arrow_item.scene().removeItem(arrow_item)
+                graphics_items[2] = None
+            else:
+                # Update existing arrow path (avoid flicker)
+                arrow_item.setPath(new_path)
+                # Update color in case measurement style changed
+                pen = QPen(measurement.text_color, max(1.0, measurement.line_width*0.9))
+                pen.setCosmetic(True)
+                arrow_item.setPen(pen)
+        else:
+            if new_path is not None and not new_path.isEmpty():
+                # Create new arrow
+                new_arrow_item = self._create_arrow_annotation(text_item, p1_draw, p2_draw, measurement)
+                # Ensure graphics_items has enough elements and backfill arrow at index 2
+                while len(graphics_items) <= 2:
+                    graphics_items.append(None)
+                graphics_items[2] = new_arrow_item
 
     def delete_selected_measurement(self):
         """Delete the currently selected measurement."""
@@ -3814,6 +3939,11 @@ class ViewerController(QObject):
         self._update_view(view_name)
         # Auto fit after rotation to avoid manual F key press
         self.view.slice_views[view_name].reset_view()
+        
+        # Force recalculate measurements for this view after rotation
+        # This ensures text positions and arrow geometry are updated for the new rotation
+        slice_idx = self.model.view_configs[view_name]['slice']
+        self.measurement_manager.update_measurement_display(view_name, slice_idx, self)
     
     def _on_global_overlay_toggled(self, checked: bool) -> None:
         """Handle global overlay toggle."""

@@ -681,6 +681,11 @@ class MeasurementManager(QObject):
         # Graphics items tracking: measurement_id -> {view_name: [line_item, text_item]}
         self._graphics_items: Dict[int, Dict[str, list]] = {}
 
+        # Joint nodes tracking: (view_name, slice_idx, key_x, key_y) -> Set[(measurement_id, handle_index)]
+        # Enables endpoint snapping and linked movement
+        self.joints: Dict[Tuple[str, int, int, int], set] = {}
+        self.snap_distance = 6  # Pixel distance for joint clustering
+
         # Measurement display settings
         self.line_width = 1
         self.line_color = QColor(255, 0, 0) # Red
@@ -722,6 +727,10 @@ class MeasurementManager(QObject):
 
         self.measurements[self._next_id] = measurement
         self.measurementAdded.emit(measurement)
+        
+        # Register endpoints to joints for snapping and linked movement
+        self._register_measurement_to_joints(self._next_id, view_name, slice_idx, start_pos, end_pos)
+        
         self._next_id += 1
 
     def _get_voxel_coords(self, view_name: str, slice_idx: int, pos: tuple) -> Tuple[float, float, float]:
@@ -734,6 +743,55 @@ class MeasurementManager(QObject):
             return (float(x), float(slice_idx), float(y))
         else:  # Axial
             return (float(x), float(y), float(slice_idx))
+    
+    def _get_joint_key(self, view_name: str, slice_idx: int, pos: tuple) -> Tuple[str, int, int, int]:
+        """Convert image position to joint key for clustering nearby endpoints."""
+        x, y = pos
+        # 使用 floor 到像素，语义更稳定，避免边界处的四舍五入误并/误分
+        key_x = int(x)
+        key_y = int(y)
+        return (view_name, slice_idx, key_x, key_y)
+    
+    def _register_measurement_to_joints(self, measurement_id: int, view_name: str, slice_idx: int, start_pos: tuple, end_pos: tuple):
+        """Register measurement endpoints to joint system."""
+        # Register start point (handle_index=0)
+        start_key = self._get_joint_key(view_name, slice_idx, start_pos)
+        if start_key not in self.joints:
+            self.joints[start_key] = set()
+        self.joints[start_key].add((measurement_id, 0))
+        
+        # Register end point (handle_index=1)
+        end_key = self._get_joint_key(view_name, slice_idx, end_pos)
+        if end_key not in self.joints:
+            self.joints[end_key] = set()
+        self.joints[end_key].add((measurement_id, 1))
+    
+    def _unregister_measurement_from_joints(self, measurement_id: int):
+        """Remove measurement endpoints from joint system."""
+        keys_to_remove = []
+        for joint_key, endpoints in self.joints.items():
+            # Remove all endpoints belonging to this measurement
+            endpoints.discard((measurement_id, 0))
+            endpoints.discard((measurement_id, 1))
+            # Clean up empty joints
+            if not endpoints:
+                keys_to_remove.append(joint_key)
+        
+        for key in keys_to_remove:
+            del self.joints[key]
+    
+    def _find_nearby_joint(self, view_name: str, slice_idx: int, pos: tuple) -> Tuple[str, int, int, int]:
+        """Find existing joint within snap distance, or None."""
+        x, y = pos
+        for joint_key in self.joints.keys():
+            if joint_key[0] != view_name or joint_key[1] != slice_idx:
+                continue
+            
+            key_x, key_y = joint_key[2], joint_key[3]
+            distance = ((x - key_x) ** 2 + (y - key_y) ** 2) ** 0.5
+            if distance <= self.snap_distance:
+                return joint_key
+        return None
 
     def add_graphics_items(self, measurement_id: int, view_name: str, line_item, text_item, arrow_item=None, handle1=None, handle2=None):
         """Track graphics items for a measurement including draggable handles."""
@@ -779,6 +837,10 @@ class MeasurementManager(QObject):
         if measurement_id in self.measurements:
             # Remove graphics first
             self.remove_graphics_items(measurement_id)
+            
+            # Unregister from joints system
+            self._unregister_measurement_from_joints(measurement_id)
+            
             # Remove data
             del self.measurements[measurement_id]
             self.measurementRemoved.emit(measurement_id)
@@ -886,6 +948,16 @@ class EndpointHandle(QGraphicsEllipseItem):
         self.setFlag(QGraphicsItem.ItemIsMovable, True)
         self.setFlag(QGraphicsItem.ItemSendsScenePositionChanges, True)
         self.setCursor(Qt.OpenHandCursor)
+        
+        # For Ctrl key detection to disable snapping
+        self._disable_snapping = False
+    
+    def mousePressEvent(self, event):
+        """Check for Ctrl key to disable snapping."""
+        if event.button() == Qt.LeftButton:
+            modifiers = QApplication.keyboardModifiers()
+            self._disable_snapping = (modifiers & Qt.ControlModifier) != 0
+        super().mousePressEvent(event)
     
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionChange and self.controller:
@@ -895,15 +967,15 @@ class EndpointHandle(QGraphicsEllipseItem):
                 rect = QRectF(0, 0, pixmap.width(), pixmap.height())
                 r = self.rect().width() * 0.5  # 半径
                 clamped = QPointF(
-                    max(r, min(rect.width()  - 1 - r, value.x())),
-                    max(r, min(rect.height() - 1 - r, value.y()))
+                    max(r, min(rect.width() - r, value.x())),
+                    max(r, min(rect.height() - r, value.y()))
                 )
                 value = clamped
             
             # Call controller callback
             if hasattr(self.controller, '_on_handle_moved'):
                 QTimer.singleShot(0, lambda: self.controller._on_handle_moved(
-                    self.view_name, self.measurement_id, self.handle_index, value))
+                    self.view_name, self.measurement_id, self.handle_index, value, self._disable_snapping))
         
         return super().itemChange(change, value)
 
@@ -1464,8 +1536,8 @@ class SliceView(QGraphicsView):
             h = self.pixmap_item.pixmap().height()
             item_point = QPointF(snap_point.x(), h - 1 - snap_point.y())
             
-            # Create snap preview circle (radius matches snap distance) as child of pixmap_item
-            radius = self.snap_distance // 2  # Half of snap distance
+            # Create snap preview circle (radius matches handle radius) as child of pixmap_item
+            radius = 5  # Match handle radius
             self._snap_preview_item = QGraphicsEllipseItem(
                 item_point.x() - radius, item_point.y() - radius, 
                 radius * 2, radius * 2, parent=self.pixmap_item
@@ -1607,9 +1679,8 @@ class SliceView(QGraphicsView):
                             # Clear text outline
                             item.setPen(QPen(Qt.NoPen))
                         elif isinstance(item, QGraphicsPathItem):
-                            # Restore elegant arrow style
-                            arrow_color = QColor(255, 255, 0)  # Bright yellow
-                            original_pen = QPen(arrow_color, 0.6)  # Elegant thin line
+                            # Restore elegant arrow style using measurement's text color
+                            original_pen = QPen(measurement.text_color, max(1.0, measurement.line_width*0.9))
                             item.setPen(original_pen)
         
         self._currently_highlighted_measurement_id = None
@@ -2453,6 +2524,7 @@ class ViewerController(QObject):
         line.setPen(QPen(measurement.line_color, measurement.line_width))
         line.setData(0, measurement.id)  # Store measurement ID
         line.setFlag(QGraphicsLineItem.ItemIsSelectable, True)
+        line.setZValue(1)  # Base layer for lines
 
         # Create text graphics item as child of pixmap_item
         text = QGraphicsSimpleTextItem(f"{measurement.length_mm:.2f} mm", parent=view.pixmap_item)
@@ -2473,6 +2545,7 @@ class ViewerController(QObject):
         text.setPos(text_pos)
         text.setData(0, measurement.id)
         text.setFlag(QGraphicsSimpleTextItem.ItemIsSelectable, True)
+        text.setZValue(2)  # Text above lines
         
         # Add arrow only if text is significantly displaced from line center
         arrow_item = None
@@ -2634,11 +2707,13 @@ class ViewerController(QObject):
                     return True
         
         # Check collision with existing measurement texts
+        # 把 expanded_rect 先映射到 scene 再比较
+        expanded_rect_scene = current_text.mapRectToScene(expanded_rect)
         for item in view.scene.items():
             if (isinstance(item, QGraphicsSimpleTextItem) and 
                 item != current_text and
                 item.data(0) is not None and  # Only check measurement texts 
-                item.sceneBoundingRect().intersects(expanded_rect)):
+                item.sceneBoundingRect().intersects(expanded_rect_scene)):
                 return True
         
         # Check collision with line
@@ -2747,7 +2822,7 @@ class ViewerController(QObject):
 
         item = QGraphicsPathItem(path, parent=text_item.parentItem())  # == pixmap_item
         item.setPen(QPen(measurement.text_color, max(1.0, measurement.line_width*0.9)))
-        item.setZValue(text_item.zValue() - 1)
+        item.setZValue(1.5)  # Arrows between lines and text
         item.setData(0, measurement.id)
         item.setFlag(QGraphicsItem.ItemIsSelectable, True)
         return item
@@ -2964,8 +3039,8 @@ class ViewerController(QObject):
         
         # Graphics removal is handled by MeasurementManager.remove_measurement()
 
-    def _on_handle_moved(self, view_name: str, measurement_id: int, handle_index: int, new_pos: QPointF):
-        """Handle endpoint handle dragging."""
+    def _on_handle_moved(self, view_name: str, measurement_id: int, handle_index: int, new_pos: QPointF, disable_snapping: bool = False):
+        """Handle endpoint handle dragging with snapping and linked movement."""
         if measurement_id not in self.measurement_manager.measurements:
             return
             
@@ -2981,27 +3056,66 @@ class ViewerController(QObject):
         current_slice = self.model.view_configs[view_name]['slice']
         axis = self.model.view_configs[view_name]['axis']
         
-        # Convert to voxel coordinates
+        # Unregister current endpoint from joints system
+        old_joint_key = None
+        for joint_key, endpoints in list(self.measurement_manager.joints.items()):
+            if (measurement_id, handle_index) in endpoints:
+                endpoints.discard((measurement_id, handle_index))
+                if not endpoints:
+                    del self.measurement_manager.joints[joint_key]
+                else:
+                    old_joint_key = joint_key
+                break
+        
+        # Check for snapping to existing joints (unless disabled by Ctrl key)
+        snapped_pos = (img_x, img_y)
+        target_joint_key = None
+        
+        if not disable_snapping:
+            nearby_joint = self.measurement_manager._find_nearby_joint(view_name, current_slice, (img_x, img_y))
+            if nearby_joint:
+                # Snap to existing joint
+                target_joint_key = nearby_joint
+                snapped_pos = (nearby_joint[2], nearby_joint[3])  # Use joint's key coordinates
+        
+        # If no snapping, create new joint at current position
+        if target_joint_key is None:
+            target_joint_key = self.measurement_manager._get_joint_key(view_name, current_slice, snapped_pos)
+        
+        # Register current endpoint to target joint
+        if target_joint_key not in self.measurement_manager.joints:
+            self.measurement_manager.joints[target_joint_key] = set()
+        self.measurement_manager.joints[target_joint_key].add((measurement_id, handle_index))
+        
+        # Convert snapped position to voxel coordinates
+        snap_x, snap_y = snapped_pos
         if axis == 0:  # Sagittal
-            voxel_coords = (float(current_slice), img_x, img_y)
+            voxel_coords = (float(current_slice), snap_x, snap_y)
         elif axis == 1:  # Coronal
-            voxel_coords = (img_x, float(current_slice), img_y)
+            voxel_coords = (snap_x, float(current_slice), snap_y)
         else:  # Axial
-            voxel_coords = (img_x, img_y, float(current_slice))
+            voxel_coords = (snap_x, snap_y, float(current_slice))
         
-        # Update measurement endpoint
-        if handle_index == 0:  # Start point
-            measurement.start_voxel = voxel_coords
-            measurement.start_world = tuple(nib.affines.apply_affine(self.model.image_affine, voxel_coords))
-        else:  # End point
-            measurement.end_voxel = voxel_coords
-            measurement.end_world = tuple(nib.affines.apply_affine(self.model.image_affine, voxel_coords))
+        # Update all linked endpoints to the same position
+        linked_measurements = set()
+        for linked_measurement_id, linked_handle_index in self.measurement_manager.joints[target_joint_key]:
+            linked_measurements.add(linked_measurement_id)
+            linked_measurement = self.measurement_manager.measurements[linked_measurement_id]
+            
+            # Update the linked endpoint
+            if linked_handle_index == 0:  # Start point
+                linked_measurement.start_voxel = voxel_coords
+                linked_measurement.start_world = tuple(nib.affines.apply_affine(self.model.image_affine, voxel_coords))
+            else:  # End point
+                linked_measurement.end_voxel = voxel_coords
+                linked_measurement.end_world = tuple(nib.affines.apply_affine(self.model.image_affine, voxel_coords))
+            
+            # Recalculate length
+            linked_measurement.length_mm = np.linalg.norm(np.array(linked_measurement.start_world) - np.array(linked_measurement.end_world))
         
-        # Recalculate length
-        measurement.length_mm = np.linalg.norm(np.array(measurement.start_world) - np.array(measurement.end_world))
-        
-        # Update graphics
-        self._update_measurement_graphics(measurement_id, view_name)
+        # Update graphics for all affected measurements
+        for linked_measurement_id in linked_measurements:
+            self._update_measurement_graphics(linked_measurement_id, view_name)
 
     def _on_line_moved(self, view_name: str, measurement_id: int, delta_item: QPointF):
         """Handle entire line dragging by updating measurement data with boundary constraints."""
@@ -3059,6 +3173,9 @@ class ViewerController(QObject):
             else:  # Axial: (x, y, slice)
                 return (voxel_coords[0] + dx_clamped, voxel_coords[1] + dy_clamped, voxel_coords[2])
         
+        # 1) 移动前：从 joints 移除本测量全部端点
+        self.measurement_manager._unregister_measurement_from_joints(measurement_id)
+
         # Update voxel coordinates with consistent boundary constraints
         measurement.start_voxel = add_delta(measurement.start_voxel)
         measurement.end_voxel = add_delta(measurement.end_voxel)
@@ -3067,6 +3184,23 @@ class ViewerController(QObject):
         measurement.start_world = tuple(nib.affines.apply_affine(self.model.image_affine, measurement.start_voxel))
         measurement.end_world = tuple(nib.affines.apply_affine(self.model.image_affine, measurement.end_voxel))
         measurement.length_mm = np.linalg.norm(np.array(measurement.start_world) - np.array(measurement.end_world))
+        
+        # 3) 计算新的图像平面端点坐标（注意这里是"图像坐标"，非翻转后的绘制坐标）
+        if axis == 0:  # sagittal
+            p1_img_new = (measurement.start_voxel[1], measurement.start_voxel[2])
+            p2_img_new = (measurement.end_voxel[1], measurement.end_voxel[2])
+        elif axis == 1:  # coronal
+            p1_img_new = (measurement.start_voxel[0], measurement.start_voxel[2])
+            p2_img_new = (measurement.end_voxel[0], measurement.end_voxel[2])
+        else:  # axial
+            p1_img_new = (measurement.start_voxel[0], measurement.start_voxel[1])
+            p2_img_new = (measurement.end_voxel[0], measurement.end_voxel[1])
+
+        # 4) 按新位置把该测量重新注册到 joints
+        current_slice = self.model.view_configs[view_name]['slice']
+        self.measurement_manager._register_measurement_to_joints(
+            measurement_id, view_name, current_slice, p1_img_new, p2_img_new
+        )
         
         # Update graphics using unified data-driven approach
         self._update_measurement_graphics(measurement_id, view_name)
@@ -3201,26 +3335,6 @@ class ViewerController(QObject):
             except Exception as e:
                 QMessageBox.critical(self.view, "Error", f"Failed to export measurements: {e}")
 
-    def export_measurements(self):
-        """Export measurements to a CSV file."""
-        if not self.measurement_manager.measurements:
-            QMessageBox.warning(self.view, "Warning", "No measurements to export.")
-            return
-
-        filepath, _ = QFileDialog.getSaveFileName(
-            self.view,
-            "Export Measurements",
-            "measurements.csv",
-            "CSV Files (*.csv)"
-        )
-
-        if filepath:
-            try:
-                self.measurement_manager.export_csv(filepath)
-                self.view.status_label.setText(f"Measurements exported to {Path(filepath).name}")
-            except Exception as e:
-                QMessageBox.critical(self.view, "Error", f"Failed to export measurements: {e}")
-    
     def load_image(self) -> None:
         """Load image file dialog."""
         filepath, _ = QFileDialog.getOpenFileName(

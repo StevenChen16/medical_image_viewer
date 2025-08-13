@@ -68,3 +68,16 @@ python nifti_viewer.py --help
 -   Matplotlib
 
 具体版本请参见 `requirements.txt`。
+
+## 开发路线图
+
+有关未来开发计划和即将推出功能的详细信息，请参见：
+- [ROADMAP_zh.md](ROADMAP_zh.md) - 综合开发路线图
+- [TECHNICAL_ANALYSIS.md](TECHNICAL_ANALYSIS.md) - 技术实施细节（英文）
+
+### 下一步主要功能
+- 增强测量工具（面积、体积、角度）
+- DICOM格式支持
+- 窗宽窗位调节与预设
+- 可扩展的插件架构
+- 高级3D可视化功能

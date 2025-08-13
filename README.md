@@ -68,3 +68,16 @@ python nifti_viewer.py --help
 -   Matplotlib
 
 See `requirements.txt` for specific versions.
+
+## Development Roadmap
+
+For detailed information about future development plans and upcoming features, see:
+- [ROADMAP.md](ROADMAP.md) - Comprehensive development roadmap
+- [TECHNICAL_ANALYSIS.md](TECHNICAL_ANALYSIS.md) - Technical implementation details
+
+### Next Major Features
+- Enhanced measurement tools (area, volume, angles)
+- DICOM format support
+- Window/Level adjustment with presets
+- Plugin architecture for extensibility
+- Advanced 3D visualization capabilities

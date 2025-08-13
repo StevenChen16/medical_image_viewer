@@ -174,6 +174,12 @@ class TranslationManager:
                 "apply_to_all": "Apply to All",
                 "normal": "Normal",
                 "bold": "Bold",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "Hide Control Panel (Ctrl+T)",
+                "copy_coordinates": "Copy Coordinates",
+                "delete": "Delete",
+                "alpha": "Alpha",
             },
             "zh": {
                 # Window titles
@@ -282,6 +288,12 @@ class TranslationManager:
                 "apply_to_all": "应用到全部",
                 "normal": "正常",
                 "bold": "粗体",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "隐藏控制面板 (Ctrl+T)",
+                "copy_coordinates": "复制坐标",
+                "delete": "删除",
+                "alpha": "透明度",
             },
             "fr": {
                 # Window titles
@@ -390,6 +402,12 @@ class TranslationManager:
                 "apply_to_all": "Appliquer à Tout",
                 "normal": "Normal",
                 "bold": "Gras",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "Masquer le Panneau de Contrôle (Ctrl+T)",
+                "copy_coordinates": "Copier les Coordonnées",
+                "delete": "Supprimer",
+                "alpha": "Alpha",
             },
             "de": {
                 # Window titles
@@ -498,6 +516,12 @@ class TranslationManager:
                 "apply_to_all": "Auf Alle anwenden",
                 "normal": "Normal",
                 "bold": "Fett",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "Kontrollfeld Ausblenden (Ctrl+T)",
+                "copy_coordinates": "Koordinaten Kopieren",
+                "delete": "Löschen",
+                "alpha": "Alpha",
             },
             "ja": {
                 # Window titles
@@ -606,6 +630,12 @@ class TranslationManager:
                 "apply_to_all": "すべてに適用",
                 "normal": "標準",
                 "bold": "太字",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "コントロールパネルを隠す (Ctrl+T)",
+                "copy_coordinates": "座標をコピー",
+                "delete": "削除",
+                "alpha": "アルファ",
             },
             "ko": {
                 # Window titles
@@ -714,6 +744,12 @@ class TranslationManager:
                 "apply_to_all": "모든 항목에 적용",
                 "normal": "보통",
                 "bold": "굵게",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "제어 패널 숨기기 (Ctrl+T)",
+                "copy_coordinates": "좌표 복사",
+                "delete": "삭제",
+                "alpha": "알파",
             },
             "es": {
                 # Window titles
@@ -822,6 +858,12 @@ class TranslationManager:
                 "apply_to_all": "Aplicar a Todos",
                 "normal": "Normal",
                 "bold": "Negrita",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "Ocultar Panel de Control (Ctrl+T)",
+                "copy_coordinates": "Copiar Coordenadas",
+                "delete": "Eliminar",
+                "alpha": "Alfa",
             },
             "zh-TW": {
                 # Window titles
@@ -930,6 +972,12 @@ class TranslationManager:
                 "apply_to_all": "套用至全部",
                 "normal": "一般",
                 "bold": "粗體",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "隱藏控制面板 (Ctrl+T)",
+                "copy_coordinates": "複製座標",
+                "delete": "刪除",
+                "alpha": "透明度",
             },
             "it": {
                 # Window titles
@@ -1038,6 +1086,12 @@ class TranslationManager:
                 "apply_to_all": "Applica a Tutti",
                 "normal": "Normale",
                 "bold": "Grassetto",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "Nascondi Pannello di Controllo (Ctrl+T)",
+                "copy_coordinates": "Copia Coordinate",
+                "delete": "Elimina",
+                "alpha": "Alfa",
             },
             "pt": {
                 # Window titles
@@ -1146,6 +1200,12 @@ class TranslationManager:
                 "apply_to_all": "Aplicar a Todos",
                 "normal": "Normal",
                 "bold": "Negrito",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "Ocultar Painel de Controle (Ctrl+T)",
+                "copy_coordinates": "Copiar Coordenadas",
+                "delete": "Excluir",
+                "alpha": "Alfa",
             },
             "ru": {
                 # Window titles
@@ -1254,6 +1314,12 @@ class TranslationManager:
                 "apply_to_all": "Применить ко Всем",
                 "normal": "Обычный",
                 "bold": "Жирный",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "Скрыть Панель Управления (Ctrl+T)",
+                "copy_coordinates": "Копировать Координаты",
+                "delete": "Удалить",
+                "alpha": "Альфа",
             }
         }
     
@@ -3340,19 +3406,12 @@ class MainWindow(QMainWindow):
         """Update all UI text with current language translations."""
         self.setWindowTitle(tr("window_title"))
         
-        # Update menu text
-        if hasattr(self, 'menuBar'):
-            for action in self.menuBar().actions():
-                menu = action.menu()
-                if menu:
-                    if menu.title() in ["File", "文件", "Fichier"]:
-                        menu.setTitle(tr("menu_file"))
-                    elif menu.title() in ["View", "视图", "Affichage"]:
-                        menu.setTitle(tr("menu_view"))
-                    elif menu.title() in ["Help", "帮助", "Aide"]:
-                        menu.setTitle(tr("menu_help"))
-                    elif menu.title() in ["Language", "语言", "Langue"]:
-                        menu.setTitle(tr("language"))
+        # Update menu text unconditionally using stored references
+        if hasattr(self, 'menus'):
+            self.menus["file"].setTitle(tr("menu_file"))
+            self.menus["view"].setTitle(tr("menu_view"))
+            self.menus["help"].setTitle(tr("menu_help"))
+            self.menus["language"].setTitle(tr("language"))
         
         # Update actions
         if hasattr(self, 'actions'):
@@ -3384,11 +3443,9 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'update_labels_btn'):
             self.update_labels_btn.setText(tr("update_labels"))
         
-        # Update status bar
+        # Update status bar unconditionally
         if hasattr(self, 'status_label'):
-            current_text = self.status_label.text()
-            if "Ready" in current_text or "就绪" in current_text or "Prêt" in current_text:
-                self.status_label.setText(tr("status_ready"))
+            self.status_label.setText(tr("status_ready"))
         
         # Update view titles
         view_titles = [tr("axial_view"), tr("sagittal_view"), tr("coronal_view")]
@@ -3468,10 +3525,10 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'snap_distance_label'):
             self.snap_distance_label.setText(tr("snap_distance"))
                     
-        # Update alpha label
+        # Update alpha label with correct key
         if hasattr(self, 'alpha_label'):
             current_alpha = self.alpha_slider.value() / 100.0 if hasattr(self, 'alpha_slider') else 0.50
-            alpha_text = tr("alpha").rstrip(':') + f": {current_alpha:.2f}"
+            alpha_text = tr("alpha") + f": {current_alpha:.2f}"
             self.alpha_label.setText(alpha_text)
             
         # Update font weight combo
@@ -3500,6 +3557,20 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'slice_groups'):
             for name, group in self.slice_groups.items():
                 group.setTitle(f"{tr(name)} {tr('slice')}")
+                
+        # Update language action text
+        if hasattr(self, 'language_actions'):
+            self.language_actions["en"].setText(tr("english"))
+            self.language_actions["zh"].setText(tr("chinese"))
+            self.language_actions["fr"].setText(tr("french"))
+            self.language_actions["de"].setText(tr("german"))
+            self.language_actions["ja"].setText(tr("japanese"))
+            self.language_actions["ko"].setText(tr("korean"))
+            self.language_actions["es"].setText(tr("spanish"))
+            self.language_actions["zh-TW"].setText(tr("traditional_chinese"))
+            self.language_actions["it"].setText(tr("italian"))
+            self.language_actions["pt"].setText(tr("portuguese"))
+            self.language_actions["ru"].setText(tr("russian"))
 
     def setup_ui(self) -> None:
         """Create main UI layout."""
@@ -3859,7 +3930,7 @@ class MainWindow(QMainWindow):
         # Control panel toggle button
         self.panel_toggle_btn = QPushButton("◀")
         self.panel_toggle_btn.setFixedSize(24, 24)
-        self.panel_toggle_btn.setToolTip("Hide Control Panel (Ctrl+T)")
+        self.panel_toggle_btn.setToolTip(tr("toggle_control_panel_tooltip"))
         self.panel_toggle_btn.setStyleSheet(
             """
             QPushButton {
@@ -4026,6 +4097,21 @@ class MainWindow(QMainWindow):
         russian_action.triggered.connect(lambda: self.change_language("ru"))
         self.language_action_group.addAction(russian_action)
         language_menu.addAction(russian_action)
+        
+        # Store language actions for easy reference
+        self.language_actions = {
+            "en": english_action,
+            "zh": chinese_action,
+            "fr": french_action,
+            "de": german_action,
+            "ja": japanese_action,
+            "ko": korean_action,
+            "es": spanish_action,
+            "zh-TW": traditional_chinese_action,
+            "it": italian_action,
+            "pt": portuguese_action,
+            "ru": russian_action,
+        }
 
         # Help menu
         help_menu = menubar.addMenu(tr("menu_help"))
@@ -4048,38 +4134,24 @@ class MainWindow(QMainWindow):
             "toggle_control_panel": toggle_control_panel_action,
             "about": about_action,
         }
+        
+        # Store menu references for easy translation updates
+        self.menus = {
+            "file": file_menu,
+            "view": view_menu,
+            "help": help_menu,
+            "language": language_menu,
+        }
 
     def change_language(self, language_code: str):
         """Change the application language and update UI."""
         set_language(language_code)
         self.update_ui_text()
         
-        # Update language menu checkmarks
-        for action in self.language_action_group.actions():
-            if language_code == "en" and tr("english") in action.text():
-                action.setChecked(True)
-            elif language_code == "zh" and tr("chinese") in action.text():
-                action.setChecked(True)
-            elif language_code == "fr" and tr("french") in action.text():
-                action.setChecked(True)
-            elif language_code == "de" and tr("german") in action.text():
-                action.setChecked(True)
-            elif language_code == "ja" and tr("japanese") in action.text():
-                action.setChecked(True)
-            elif language_code == "ko" and tr("korean") in action.text():
-                action.setChecked(True)
-            elif language_code == "es" and tr("spanish") in action.text():
-                action.setChecked(True)
-            elif language_code == "zh-TW" and tr("traditional_chinese") in action.text():
-                action.setChecked(True)
-            elif language_code == "it" and tr("italian") in action.text():
-                action.setChecked(True)
-            elif language_code == "pt" and tr("portuguese") in action.text():
-                action.setChecked(True)
-            elif language_code == "ru" and tr("russian") in action.text():
-                action.setChecked(True)
-            else:
-                action.setChecked(False)
+        # Update language menu checkmarks using stored actions
+        if hasattr(self, 'language_actions'):
+            for code, action in self.language_actions.items():
+                action.setChecked(code == language_code)
 
     def setup_statusbar(self) -> None:
         """Create status bar."""
@@ -4378,7 +4450,7 @@ class ViewerController(QObject):
         menu = QMenu(self.view)
 
         # Copy coordinates action
-        copy_coords_action = menu.addAction("Copy Coordinates")
+        copy_coords_action = menu.addAction(tr("copy_coordinates"))
         copy_coords_action.triggered.connect(
             lambda: self.copy_measurement_coordinates(item)
         )
@@ -4397,7 +4469,7 @@ class ViewerController(QObject):
         menu.addSeparator()
 
         # Delete action
-        delete_action = menu.addAction("Delete")
+        delete_action = menu.addAction(tr("delete"))
         delete_action.triggered.connect(
             lambda: self.delete_measurement_by_item(item))
 
@@ -6162,7 +6234,7 @@ class ViewerController(QObject):
             # Update button appearance
             self.view.panel_toggle_btn.setText("◀")
             self.view.panel_toggle_btn.setToolTip(
-                "Hide Control Panel (Ctrl+T)")
+                tr("toggle_control_panel_tooltip"))
             self.view.actions["toggle_control_panel"].setChecked(True)
 
     def _reconnect_control_signals(self) -> None:
@@ -6360,7 +6432,7 @@ class ViewerController(QObject):
         """Handle alpha slider changes."""
         alpha = value / 100.0
         self.model.global_alpha = alpha
-        self.view.alpha_label.setText(f"Alpha: {alpha:.2f}")
+        self.view.alpha_label.setText(f"{tr('alpha')}: {alpha:.2f}")
 
         # Update all view configs
         for config in self.model.view_configs.values():

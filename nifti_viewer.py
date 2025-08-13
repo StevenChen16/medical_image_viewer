@@ -178,6 +178,9 @@ class TranslationManager:
                 # Tooltips and context menus
                 "toggle_control_panel_tooltip": "Hide Control Panel (Ctrl+T)",
                 "copy_coordinates": "Copy Coordinates",
+                "copy_length": "Copy Length",
+                "apply_style_to_all": "Apply Style to All",
+                "select_label_color": "Select Label Color",
                 "delete": "Delete",
                 "alpha": "Alpha",
             },
@@ -292,6 +295,9 @@ class TranslationManager:
                 # Tooltips and context menus
                 "toggle_control_panel_tooltip": "隐藏控制面板 (Ctrl+T)",
                 "copy_coordinates": "复制坐标",
+                "copy_length": "复制长度",
+                "apply_style_to_all": "应用样式到所有",
+                "select_label_color": "选择标签颜色",
                 "delete": "删除",
                 "alpha": "透明度",
             },
@@ -406,6 +412,9 @@ class TranslationManager:
                 # Tooltips and context menus
                 "toggle_control_panel_tooltip": "Masquer le Panneau de Contrôle (Ctrl+T)",
                 "copy_coordinates": "Copier les Coordonnées",
+                "copy_length": "Copier la Longueur",
+                "apply_style_to_all": "Appliquer le Style à Tout",
+                "select_label_color": "Sélectionner la Couleur d'Étiquette",
                 "delete": "Supprimer",
                 "alpha": "Alpha",
             },
@@ -520,6 +529,9 @@ class TranslationManager:
                 # Tooltips and context menus
                 "toggle_control_panel_tooltip": "Kontrollfeld Ausblenden (Ctrl+T)",
                 "copy_coordinates": "Koordinaten Kopieren",
+                "copy_length": "Länge Kopieren",
+                "apply_style_to_all": "Stil auf Alle Anwenden",
+                "select_label_color": "Label-Farbe Auswählen",
                 "delete": "Löschen",
                 "alpha": "Alpha",
             },
@@ -634,6 +646,9 @@ class TranslationManager:
                 # Tooltips and context menus
                 "toggle_control_panel_tooltip": "コントロールパネルを隠す (Ctrl+T)",
                 "copy_coordinates": "座標をコピー",
+                "copy_length": "長さをコピー",
+                "apply_style_to_all": "スタイルをすべてに適用",
+                "select_label_color": "ラベル色を選択",
                 "delete": "削除",
                 "alpha": "アルファ",
             },
@@ -748,6 +763,9 @@ class TranslationManager:
                 # Tooltips and context menus
                 "toggle_control_panel_tooltip": "제어 패널 숨기기 (Ctrl+T)",
                 "copy_coordinates": "좌표 복사",
+                "copy_length": "길이 복사",
+                "apply_style_to_all": "모든 항목에 스타일 적용",
+                "select_label_color": "라벨 색상 선택",
                 "delete": "삭제",
                 "alpha": "알파",
             },
@@ -862,6 +880,9 @@ class TranslationManager:
                 # Tooltips and context menus
                 "toggle_control_panel_tooltip": "Ocultar Panel de Control (Ctrl+T)",
                 "copy_coordinates": "Copiar Coordenadas",
+                "copy_length": "Copiar Longitud",
+                "apply_style_to_all": "Aplicar Estilo a Todo",
+                "select_label_color": "Seleccionar Color de Etiqueta",
                 "delete": "Eliminar",
                 "alpha": "Alfa",
             },
@@ -976,6 +997,9 @@ class TranslationManager:
                 # Tooltips and context menus
                 "toggle_control_panel_tooltip": "隱藏控制面板 (Ctrl+T)",
                 "copy_coordinates": "複製座標",
+                "copy_length": "複製長度",
+                "apply_style_to_all": "套用樣式到全部",
+                "select_label_color": "選擇標籤顏色",
                 "delete": "刪除",
                 "alpha": "透明度",
             },
@@ -1090,6 +1114,9 @@ class TranslationManager:
                 # Tooltips and context menus
                 "toggle_control_panel_tooltip": "Nascondi Pannello di Controllo (Ctrl+T)",
                 "copy_coordinates": "Copia Coordinate",
+                "copy_length": "Copia Lunghezza",
+                "apply_style_to_all": "Applica Stile a Tutto",
+                "select_label_color": "Seleziona Colore Etichetta",
                 "delete": "Elimina",
                 "alpha": "Alfa",
             },
@@ -1204,6 +1231,9 @@ class TranslationManager:
                 # Tooltips and context menus
                 "toggle_control_panel_tooltip": "Ocultar Painel de Controle (Ctrl+T)",
                 "copy_coordinates": "Copiar Coordenadas",
+                "copy_length": "Copiar Comprimento",
+                "apply_style_to_all": "Aplicar Estilo a Tudo",
+                "select_label_color": "Selecionar Cor da Etiqueta",
                 "delete": "Excluir",
                 "alpha": "Alfa",
             },
@@ -1318,6 +1348,9 @@ class TranslationManager:
                 # Tooltips and context menus
                 "toggle_control_panel_tooltip": "Скрыть Панель Управления (Ctrl+T)",
                 "copy_coordinates": "Копировать Координаты",
+                "copy_length": "Копировать Длину",
+                "apply_style_to_all": "Применить Стиль ко Всем",
+                "select_label_color": "Выбрать Цвет Метки",
                 "delete": "Удалить",
                 "alpha": "Альфа",
             }
@@ -1429,7 +1462,7 @@ class ColorButton(QPushButton):
     def open_color_picker(self):
         """Open color picker dialog."""
         dialog = QColorDialog(self._color, self)
-        dialog.setWindowTitle("Select Label Color")
+        dialog.setWindowTitle(tr("select_label_color"))
 
         if dialog.exec() == QColorDialog.Accepted:
             new_color = dialog.currentColor()
@@ -4456,14 +4489,14 @@ class ViewerController(QObject):
         )
 
         # Copy length action
-        copy_length_action = menu.addAction("Copy Length")
+        copy_length_action = menu.addAction(tr("copy_length"))
         copy_length_action.triggered.connect(
             lambda: self.copy_measurement_length(item))
 
         menu.addSeparator()
 
         # Apply current style to all action
-        apply_to_all_action = menu.addAction("Apply Style to All")
+        apply_to_all_action = menu.addAction(tr("apply_style_to_all"))
         apply_to_all_action.triggered.connect(self.apply_style_to_all)
 
         menu.addSeparator()
@@ -6406,7 +6439,7 @@ class ViewerController(QObject):
                         self.view.slice_views[view_name].mapFromScene(
                             QPointF(x, y))
                     ),
-                    f"Label: {label_value}",
+                    f"{tr('label_prefix')}: {label_value}",
                 )
 
     def _rotate_view(self, view_name: str) -> None:

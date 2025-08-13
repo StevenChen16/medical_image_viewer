@@ -126,6 +126,46 @@ class TranslationManager:
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
+                
+                # Control panel groups
+                "file_operations": "File Operations",
+                "view_controls": "View Controls",
+                "overlay_controls": "Overlay Controls",
+                "measurement_tools": "Measurement Tools",
+                "measurement_settings": "Measurement Settings",
+                
+                # Control panel elements
+                "no_image_loaded": "No image loaded...",
+                "no_labels_loaded_placeholder": "No labels loaded...",
+                "slice": "Slice:",
+                "rotate_90": "Rotate 90°",
+                "reset_to_defaults": "Reset to Defaults",
+                "alpha_label": "Alpha: 0.50",
+                
+                # View names
+                "axial": "Axial",
+                "sagittal": "Sagittal", 
+                "coronal": "Coronal",
+                
+                # Measurement tools
+                "line_tool": "Line Tool",
+                "eraser": "Eraser",
+                "export_csv": "Export CSV",
+                "measurements": "Measurements:",
+                "select_all": "Select All",
+                "deselect_all": "Deselect All",
+                "line_width": "Line Width:",
+                "line_color": "Line Color:",
+                "text_color": "Text Color:",
+                "font_size": "Font Size:",
+                "font_weight": "Font Weight:",
+                "auto_snap": "Auto-Snap:",
+                "enable_endpoint_snapping": "Enable endpoint snapping",
+                "snap_distance": "Snap Distance:",
+                "apply_to_selected": "Apply to Selected",
+                "apply_to_all": "Apply to All",
+                "normal": "Normal",
+                "bold": "Bold",
             },
             "zh": {
                 # Window titles
@@ -186,6 +226,46 @@ class TranslationManager:
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
+                
+                # Control panel groups
+                "file_operations": "文件操作",
+                "view_controls": "视图控制",
+                "overlay_controls": "叠加控制",
+                "measurement_tools": "测量工具",
+                "measurement_settings": "测量设置",
+                
+                # Control panel elements
+                "no_image_loaded": "未加载影像...",
+                "no_labels_loaded_placeholder": "未加载标签...",
+                "slice": "切片:",
+                "rotate_90": "旋转90°",
+                "reset_to_defaults": "重置为默认",
+                "alpha_label": "透明度: 0.50",
+                
+                # View names
+                "axial": "轴向",
+                "sagittal": "矢状",
+                "coronal": "冠状",
+                
+                # Measurement tools
+                "line_tool": "线条工具",
+                "eraser": "橡皮擦",
+                "export_csv": "导出CSV",
+                "measurements": "测量:",
+                "select_all": "全选",
+                "deselect_all": "取消全选",
+                "line_width": "线宽:",
+                "line_color": "线条颜色:",
+                "text_color": "文字颜色:",
+                "font_size": "字体大小:",
+                "font_weight": "字体粗细:",
+                "auto_snap": "自动吸附:",
+                "enable_endpoint_snapping": "启用端点吸附",
+                "snap_distance": "吸附距离:",
+                "apply_to_selected": "应用到选中",
+                "apply_to_all": "应用到全部",
+                "normal": "正常",
+                "bold": "粗体",
             },
             "fr": {
                 # Window titles
@@ -246,6 +326,46 @@ class TranslationManager:
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
+                
+                # Control panel groups
+                "file_operations": "Opérations sur les Fichiers",
+                "view_controls": "Contrôles d'Affichage",
+                "overlay_controls": "Contrôles de Superposition",
+                "measurement_tools": "Outils de Mesure",
+                "measurement_settings": "Paramètres de Mesure",
+                
+                # Control panel elements
+                "no_image_loaded": "Aucune image chargée...",
+                "no_labels_loaded_placeholder": "Aucune étiquette chargée...",
+                "slice": "Tranche:",
+                "rotate_90": "Rotation 90°",
+                "reset_to_defaults": "Rétablir par Défaut",
+                "alpha_label": "Alpha: 0.50",
+                
+                # View names
+                "axial": "Axial",
+                "sagittal": "Sagittal",
+                "coronal": "Coronal",
+                
+                # Measurement tools
+                "line_tool": "Outil Ligne",
+                "eraser": "Gomme",
+                "export_csv": "Exporter CSV",
+                "measurements": "Mesures:",
+                "select_all": "Tout Sélectionner",
+                "deselect_all": "Tout Désélectionner",
+                "line_width": "Largeur de Ligne:",
+                "line_color": "Couleur de Ligne:",
+                "text_color": "Couleur du Texte:",
+                "font_size": "Taille de Police:",
+                "font_weight": "Graisse de Police:",
+                "auto_snap": "Accrochage Auto:",
+                "enable_endpoint_snapping": "Activer l'accrochage des points",
+                "snap_distance": "Distance d'Accrochage:",
+                "apply_to_selected": "Appliquer à la Sélection",
+                "apply_to_all": "Appliquer à Tout",
+                "normal": "Normal",
+                "bold": "Gras",
             }
         }
     
@@ -2396,6 +2516,102 @@ class MainWindow(QMainWindow):
                         title_widget = layout.itemAt(0).widget()
                         if isinstance(title_widget, QLabel):
                             title_widget.setText(view_titles[i])
+        
+        # Update control panel elements
+        if hasattr(self, 'image_path_input'):
+            self.image_path_input.setPlaceholderText(tr("no_image_loaded"))
+        if hasattr(self, 'label_path_input'):
+            self.label_path_input.setPlaceholderText(tr("no_labels_loaded_placeholder"))
+        if hasattr(self, 'image_path_label'):
+            self.image_path_label.setText(tr("image_path"))
+        if hasattr(self, 'label_path_label'):
+            self.label_path_label.setText(tr("label_path"))
+            
+        # Update checkboxes
+        if hasattr(self, 'view_checkboxes'):
+            for name, checkbox in self.view_checkboxes.items():
+                checkbox.setText(tr(name))
+        if hasattr(self, 'global_overlay_cb'):
+            self.global_overlay_cb.setText(tr("show_overlay"))
+        if hasattr(self, 'snap_enabled_checkbox'):
+            self.snap_enabled_checkbox.setText(tr("enable_endpoint_snapping"))
+            
+        # Update buttons
+        if hasattr(self, 'reset_colors_btn'):
+            self.reset_colors_btn.setText(tr("reset_to_defaults"))
+        if hasattr(self, 'line_tool_btn'):
+            self.line_tool_btn.setText(tr("line_tool"))
+        if hasattr(self, 'eraser_tool_btn'):
+            self.eraser_tool_btn.setText(tr("eraser"))
+        if hasattr(self, 'export_measurements_btn'):
+            self.export_measurements_btn.setText(tr("export_csv"))
+        if hasattr(self, 'select_all_btn'):
+            self.select_all_btn.setText(tr("select_all"))
+        if hasattr(self, 'deselect_all_btn'):
+            self.deselect_all_btn.setText(tr("deselect_all"))
+        if hasattr(self, 'apply_to_selected_btn'):
+            self.apply_to_selected_btn.setText(tr("apply_to_selected"))
+        if hasattr(self, 'apply_to_all_btn'):
+            self.apply_to_all_btn.setText(tr("apply_to_all"))
+            
+        # Update rotate buttons in slice controls
+        if hasattr(self, 'slice_controls'):
+            for name, controls in self.slice_controls.items():
+                if 'rotate_btn' in controls:
+                    controls['rotate_btn'].setText(tr("rotate_90"))
+                if 'slice_label' in controls:
+                    controls['slice_label'].setText(tr("slice"))
+                    
+        # Update measurement settings labels
+        if hasattr(self, 'measurements_label'):
+            self.measurements_label.setText(tr("measurements"))
+        if hasattr(self, 'line_width_label'):
+            self.line_width_label.setText(tr("line_width"))
+        if hasattr(self, 'line_color_label'):
+            self.line_color_label.setText(tr("line_color"))
+        if hasattr(self, 'text_color_label'):
+            self.text_color_label.setText(tr("text_color"))
+        if hasattr(self, 'font_size_label'):
+            self.font_size_label.setText(tr("font_size"))
+        if hasattr(self, 'font_weight_label'):
+            self.font_weight_label.setText(tr("font_weight"))
+        if hasattr(self, 'auto_snap_label'):
+            self.auto_snap_label.setText(tr("auto_snap"))
+        if hasattr(self, 'snap_distance_label'):
+            self.snap_distance_label.setText(tr("snap_distance"))
+                    
+        # Update alpha label
+        if hasattr(self, 'alpha_label'):
+            current_alpha = self.alpha_slider.value() / 100.0 if hasattr(self, 'alpha_slider') else 0.50
+            alpha_text = tr("alpha").rstrip(':') + f": {current_alpha:.2f}"
+            self.alpha_label.setText(alpha_text)
+            
+        # Update font weight combo
+        if hasattr(self, 'font_weight_combo'):
+            current_data = [self.font_weight_combo.itemData(i) for i in range(self.font_weight_combo.count())]
+            current_index = self.font_weight_combo.currentIndex()
+            self.font_weight_combo.clear()
+            self.font_weight_combo.addItem(tr("normal"), QFont.Normal)
+            self.font_weight_combo.addItem(tr("bold"), QFont.Bold)
+            if current_index < len(current_data):
+                self.font_weight_combo.setCurrentIndex(current_index)
+                
+        # Update group box titles
+        if hasattr(self, 'file_group'):
+            self.file_group.setTitle(tr("file_operations"))
+        if hasattr(self, 'view_group'):
+            self.view_group.setTitle(tr("view_controls"))
+        if hasattr(self, 'overlay_group'):
+            self.overlay_group.setTitle(tr("overlay_controls"))
+        if hasattr(self, 'label_colors_group'):
+            self.label_colors_group.setTitle(tr("label_colors"))
+        if hasattr(self, 'measure_group'):
+            self.measure_group.setTitle(tr("measurement_tools"))
+        if hasattr(self, 'settings_group'):
+            self.settings_group.setTitle(tr("measurement_settings"))
+        if hasattr(self, 'slice_groups'):
+            for name, group in self.slice_groups.items():
+                group.setTitle(f"{tr(name)} {tr('slice')}")
 
     def setup_ui(self) -> None:
         """Create main UI layout."""
@@ -2478,19 +2694,22 @@ class MainWindow(QMainWindow):
         file_layout.addWidget(self.load_image_btn)
         file_layout.addWidget(self.load_labels_btn)
         file_layout.addWidget(self.reset_btn)
-        file_layout.addWidget(QLabel(tr("image_path")))
+        self.image_path_label = QLabel(tr("image_path"))
+        file_layout.addWidget(self.image_path_label)
         self.image_path_input = QLineEdit()
-        self.image_path_input.setPlaceholderText("No image loaded...")
+        self.image_path_input.setPlaceholderText(tr("no_image_loaded"))
         file_layout.addWidget(self.image_path_input)
         self.update_image_btn = QPushButton(tr("update_image"))
         file_layout.addWidget(self.update_image_btn)
-        file_layout.addWidget(QLabel(tr("label_path")))
+        self.label_path_label = QLabel(tr("label_path"))
+        file_layout.addWidget(self.label_path_label)
         self.label_path_input = QLineEdit()
-        self.label_path_input.setPlaceholderText("No labels loaded...")
+        self.label_path_input.setPlaceholderText(tr("no_labels_loaded_placeholder"))
         file_layout.addWidget(self.label_path_input)
         self.update_labels_btn = QPushButton(tr("update_labels"))
         file_layout.addWidget(self.update_labels_btn)
-        file_group = create_collapsible_group("File Operations", file_layout)
+        file_group = create_collapsible_group(tr("file_operations"), file_layout)
+        self.file_group = file_group  # Store reference for language updates
         dock_layout.addWidget(file_group)
 
         # View controls
@@ -2498,11 +2717,12 @@ class MainWindow(QMainWindow):
         self.view_checkboxes = {}
         view_names = ["axial", "sagittal", "coronal"]
         for i, name in enumerate(view_names):
-            checkbox = QCheckBox(name.title())
+            checkbox = QCheckBox(tr(name))
             checkbox.setChecked(True)
             self.view_checkboxes[name] = checkbox
             view_layout.addWidget(checkbox, 0, i)
-        view_group = create_collapsible_group("View Controls", view_layout)
+        view_group = create_collapsible_group(tr("view_controls"), view_layout)
+        self.view_group = view_group  # Store reference for language updates
         dock_layout.addWidget(view_group)
 
         # Slice controls
@@ -2517,8 +2737,9 @@ class MainWindow(QMainWindow):
             spinbox.setMinimum(0)
             spinbox.setMaximum(100)
             spinbox.setValue(50)
-            rotate_btn = QPushButton("Rotate 90°")
-            slice_layout.addWidget(QLabel("Slice:"))
+            rotate_btn = QPushButton(tr("rotate_90"))
+            slice_label = QLabel(tr("slice"))
+            slice_layout.addWidget(slice_label)
             slice_layout.addWidget(slider)
             slice_layout.addWidget(spinbox)
             slice_layout.addWidget(rotate_btn)
@@ -2526,17 +2747,22 @@ class MainWindow(QMainWindow):
                 "slider": slider,
                 "spinbox": spinbox,
                 "rotate_btn": rotate_btn,
+                "slice_label": slice_label,  # Store label reference
             }
             slice_group = create_collapsible_group(
-                f"{name.title()} Slice", slice_layout
+                f"{tr(name)} {tr('slice')}", slice_layout
             )
+            # Store references for language updates
+            if not hasattr(self, 'slice_groups'):
+                self.slice_groups = {}
+            self.slice_groups[name] = slice_group
             dock_layout.addWidget(slice_group)
 
         # Overlay controls
         overlay_layout = QVBoxLayout()
-        self.global_overlay_cb = QCheckBox("Show Overlay")
+        self.global_overlay_cb = QCheckBox(tr("show_overlay"))
         self.global_overlay_cb.setChecked(True)
-        self.alpha_label = QLabel("Alpha: 0.50")
+        self.alpha_label = QLabel(tr("alpha_label"))
         self.alpha_slider = QSlider(Qt.Horizontal)
         self.alpha_slider.setMinimum(0)
         self.alpha_slider.setMaximum(100)
@@ -2545,7 +2771,8 @@ class MainWindow(QMainWindow):
         overlay_layout.addWidget(self.alpha_label)
         overlay_layout.addWidget(self.alpha_slider)
         overlay_group = create_collapsible_group(
-            "Overlay Controls", overlay_layout)
+            tr("overlay_controls"), overlay_layout)
+        self.overlay_group = overlay_group  # Store reference for language updates
         dock_layout.addWidget(overlay_group)
 
         # Label Colors controls
@@ -2577,12 +2804,12 @@ class MainWindow(QMainWindow):
         self.label_colors_layout.addWidget(self.label_colors_scroll)
 
         # Reset colors button
-        self.reset_colors_btn = QPushButton("Reset to Defaults")
+        self.reset_colors_btn = QPushButton(tr("reset_to_defaults"))
         self.reset_colors_btn.setEnabled(False)
         self.label_colors_layout.addWidget(self.reset_colors_btn)
 
         self.label_colors_group = create_collapsible_group(
-            "Label Colors", self.label_colors_layout
+            tr("label_colors"), self.label_colors_layout
         )
         self.label_colors_group.setChecked(False)  # Start collapsed
         dock_layout.addWidget(self.label_colors_group)
@@ -2592,15 +2819,15 @@ class MainWindow(QMainWindow):
 
         # Tool buttons in horizontal layout
         tool_buttons_layout = QHBoxLayout()
-        self.line_tool_btn = QPushButton("Line Tool")
+        self.line_tool_btn = QPushButton(tr("line_tool"))
         self.line_tool_btn.setCheckable(True)
-        self.eraser_tool_btn = QPushButton("Eraser")
+        self.eraser_tool_btn = QPushButton(tr("eraser"))
         self.eraser_tool_btn.setCheckable(True)
         tool_buttons_layout.addWidget(self.line_tool_btn)
         tool_buttons_layout.addWidget(self.eraser_tool_btn)
         measure_layout.addLayout(tool_buttons_layout)
 
-        self.export_measurements_btn = QPushButton("Export CSV")
+        self.export_measurements_btn = QPushButton(tr("export_csv"))
         measure_layout.addWidget(self.export_measurements_btn)
 
         # Measurement Settings with Enhanced UI
@@ -2608,7 +2835,8 @@ class MainWindow(QMainWindow):
 
         # Measurement list with checkboxes for batch operations
         list_container_layout = QVBoxLayout()
-        list_container_layout.addWidget(QLabel("Measurements:"))
+        self.measurements_label = QLabel(tr("measurements"))
+        list_container_layout.addWidget(self.measurements_label)
         self.measurements_list = QListWidget()
         self.measurements_list.setSelectionMode(QListWidget.MultiSelection)
         self.measurements_list.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -2616,9 +2844,9 @@ class MainWindow(QMainWindow):
 
         # Batch operation buttons
         batch_buttons_layout = QHBoxLayout()
-        self.select_all_btn = QPushButton("Select All")
+        self.select_all_btn = QPushButton(tr("select_all"))
         self.select_all_btn.setMaximumWidth(80)
-        self.deselect_all_btn = QPushButton("Deselect All")
+        self.deselect_all_btn = QPushButton(tr("deselect_all"))
         self.deselect_all_btn.setMaximumWidth(90)
         batch_buttons_layout.addWidget(self.select_all_btn)
         batch_buttons_layout.addWidget(self.deselect_all_btn)
@@ -2629,7 +2857,8 @@ class MainWindow(QMainWindow):
 
         # Style settings for selected measurements
         style_settings_layout = QGridLayout()
-        style_settings_layout.addWidget(QLabel("Line Width:"), 0, 0)
+        self.line_width_label = QLabel(tr("line_width"))
+        style_settings_layout.addWidget(self.line_width_label, 0, 0)
         self.line_width_spinbox = QDoubleSpinBox()
         self.line_width_spinbox.setRange(0.1, 10.0)  # 0.1 to 10.0 pixels
         self.line_width_spinbox.setValue(1.5)  # Default to 1.5 pixel (thinner)
@@ -2637,15 +2866,18 @@ class MainWindow(QMainWindow):
         self.line_width_spinbox.setDecimals(1)  # 1 decimal place
         style_settings_layout.addWidget(self.line_width_spinbox, 0, 1)
 
-        style_settings_layout.addWidget(QLabel("Line Color:"), 1, 0)
+        self.line_color_label = QLabel(tr("line_color"))
+        style_settings_layout.addWidget(self.line_color_label, 1, 0)
         self.line_color_btn = ColorButton(color=(255, 0, 0))  # Default red
         style_settings_layout.addWidget(self.line_color_btn, 1, 1)
 
-        style_settings_layout.addWidget(QLabel("Text Color:"), 2, 0)
+        self.text_color_label = QLabel(tr("text_color"))
+        style_settings_layout.addWidget(self.text_color_label, 2, 0)
         self.text_color_btn = ColorButton(color=(255, 0, 0))  # Default red
         style_settings_layout.addWidget(self.text_color_btn, 2, 1)
 
-        style_settings_layout.addWidget(QLabel("Font Size:"), 3, 0)
+        self.font_size_label = QLabel(tr("font_size"))
+        style_settings_layout.addWidget(self.font_size_label, 3, 0)
         self.font_size_spinbox = QDoubleSpinBox()
         self.font_size_spinbox.setRange(2.0, 24.0)  # 2.0 to 24.0 pt
         self.font_size_spinbox.setValue(5.0)  # Default to 5.0 pt (smaller)
@@ -2653,22 +2885,25 @@ class MainWindow(QMainWindow):
         self.font_size_spinbox.setDecimals(1)  # 1 decimal place
         style_settings_layout.addWidget(self.font_size_spinbox, 3, 1)
 
-        style_settings_layout.addWidget(QLabel("Font Weight:"), 4, 0)
+        self.font_weight_label = QLabel(tr("font_weight"))
+        style_settings_layout.addWidget(self.font_weight_label, 4, 0)
         self.font_weight_combo = QComboBox()
-        self.font_weight_combo.addItem("Normal", QFont.Normal)
-        self.font_weight_combo.addItem("Bold", QFont.Bold)
+        self.font_weight_combo.addItem(tr("normal"), QFont.Normal)
+        self.font_weight_combo.addItem(tr("bold"), QFont.Bold)
         style_settings_layout.addWidget(self.font_weight_combo, 4, 1)
 
         settings_layout.addLayout(style_settings_layout)
 
         # Auto-snap settings
         snap_settings_layout = QGridLayout()
-        snap_settings_layout.addWidget(QLabel("Auto-Snap:"), 0, 0)
-        self.snap_enabled_checkbox = QCheckBox("Enable endpoint snapping")
+        self.auto_snap_label = QLabel(tr("auto_snap"))
+        snap_settings_layout.addWidget(self.auto_snap_label, 0, 0)
+        self.snap_enabled_checkbox = QCheckBox(tr("enable_endpoint_snapping"))
         self.snap_enabled_checkbox.setChecked(True)  # Default enabled
         snap_settings_layout.addWidget(self.snap_enabled_checkbox, 0, 1)
 
-        snap_settings_layout.addWidget(QLabel("Snap Distance:"), 1, 0)
+        self.snap_distance_label = QLabel(tr("snap_distance"))
+        snap_settings_layout.addWidget(self.snap_distance_label, 1, 0)
         self.snap_distance_spinbox = QDoubleSpinBox()
         self.snap_distance_spinbox.setRange(
             3.0, 20.0)  # 3 to 20 pixels (smaller range)
@@ -2684,19 +2919,21 @@ class MainWindow(QMainWindow):
 
         # Apply buttons
         apply_buttons_layout = QHBoxLayout()
-        self.apply_to_selected_btn = QPushButton("Apply to Selected")
-        self.apply_to_all_btn = QPushButton("Apply to All")
+        self.apply_to_selected_btn = QPushButton(tr("apply_to_selected"))
+        self.apply_to_all_btn = QPushButton(tr("apply_to_all"))
         apply_buttons_layout.addWidget(self.apply_to_selected_btn)
         apply_buttons_layout.addWidget(self.apply_to_all_btn)
         settings_layout.addLayout(apply_buttons_layout)
 
         measure_group = create_collapsible_group(
-            "Measurement Tools", measure_layout)
+            tr("measurement_tools"), measure_layout)
+        self.measure_group = measure_group  # Store reference for language updates
         dock_layout.addWidget(measure_group)
 
         settings_group = create_collapsible_group(
-            "Measurement Settings", settings_layout
+            tr("measurement_settings"), settings_layout
         )
+        self.settings_group = settings_group  # Store reference for language updates
         # Start expanded to show the new features
         settings_group.setChecked(True)
         dock_layout.addWidget(settings_group)

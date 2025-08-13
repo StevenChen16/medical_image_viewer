@@ -123,6 +123,34 @@ class TranslationManager:
                 
                 # About dialog
                 "close": "Close",
+                
+                # About dialog content
+                "other_languages": "Other Languages",
+                "select_language": "Select Language:",
+                "about_what_is": "What is this Viewer?",
+                "about_description": "A simple, fast viewer for medical images. View MRI scans, overlays, and segmentation masks in three perspectives simultaneously.",
+                "about_how_to_use": "How to Use",
+                "about_load_files": "<b>Load Files:</b> Use File menu → Load Image/Labels, or type paths in the right panel",
+                "about_navigate": "<b>Navigate:</b> Mouse wheel scrolls through slices, Ctrl+wheel zooms in/out",
+                "about_pan_rotate": "<b>Pan & Rotate:</b> Right-click drag to move view, click rotation buttons to flip",
+                "about_overlays": "<b>Overlays:</b> Check \"Show Overlay\" and adjust transparency slider",
+                "about_save": "<b>Save:</b> File → Save Screenshot (Ctrl+S) or Volume (Ctrl+Shift+S)",
+                "about_shortcuts": "Keyboard Shortcuts",
+                "about_open_image": "Open image file",
+                "about_open_labels": "Open label file",
+                "about_save_screenshot": "Save screenshot",
+                "about_save_volume": "Open volume save menu",
+                "about_reset": "Reset views and clear cache",
+                "about_toggle_panel": "Toggle control panel",
+                "about_fit_views": "Fit all views to window",
+                "about_show_dialog": "Show this dialog",
+                "about_scroll_slices": "Scroll through slices",
+                "about_zoom": "Zoom in/out",
+                "about_pan_view": "Pan view",
+                "about_command_line": "Command Line Options",
+                "about_command_help": "Run <code>python nifti_viewer.py --help</code> for full options.<br>Examples: <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "File Support",
+                "about_file_formats": "Supports NIfTI (.nii, .nii.gz) and MetaImage (.mha, .mhd) formats.",
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
@@ -240,6 +268,34 @@ class TranslationManager:
                 
                 # About dialog
                 "close": "关闭",
+                
+                # About dialog content
+                "other_languages": "其他语言",
+                "select_language": "选择语言：",
+                "about_what_is": "什么是医学影像查看器？",
+                "about_description": "简单快速的医学影像查看工具。支持查看磁共振(MRI)扫描图像、叠加图层和分割掩膜，同时显示三个角度的切面视图。",
+                "about_how_to_use": "如何使用",
+                "about_load_files": "<b>加载文件：</b>使用文件菜单 → 加载影像/标签，或在右侧面板输入文件路径",
+                "about_navigate": "<b>导航操作：</b>鼠标滚轮切换切片，Ctrl+滚轮缩放视图",
+                "about_pan_rotate": "<b>平移旋转：</b>右键拖拽移动视图，点击旋转按钮翻转方向",
+                "about_overlays": "<b>叠加显示：</b>勾选\"显示叠加\"并调节透明度滑条",
+                "about_save": "<b>保存：</b>文件 → 保存截图 (Ctrl+S) 或保存体数据 (Ctrl+Shift+S)",
+                "about_shortcuts": "快捷键一览",
+                "about_open_image": "打开影像文件",
+                "about_open_labels": "打开标签文件",
+                "about_save_screenshot": "保存截图",
+                "about_save_volume": "打开体数据保存菜单",
+                "about_reset": "重置视图并清空缓存",
+                "about_toggle_panel": "切换控制面板显示",
+                "about_fit_views": "适应所有视图到窗口",
+                "about_show_dialog": "显示此对话框",
+                "about_scroll_slices": "切换切片",
+                "about_zoom": "缩放视图",
+                "about_pan_view": "平移视图",
+                "about_command_line": "命令行选项",
+                "about_command_help": "运行 <code>python nifti_viewer.py --help</code> 查看完整选项。<br>示例：<code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "文件支持",
+                "about_file_formats": "支持 NIfTI (.nii, .nii.gz) 和 MetaImage (.mha, .mhd) 格式。",
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
@@ -357,6 +413,34 @@ class TranslationManager:
                 
                 # About dialog
                 "close": "Fermer",
+                
+                # About dialog content
+                "other_languages": "Autres Langues",
+                "select_language": "Sélectionner la langue :",
+                "about_what_is": "Qu'est-ce que cette Visionneuse ?",
+                "about_description": "Une visionneuse simple et rapide pour les images médicales. Visualisez les examens IRM, les superpositions et les masques de segmentation dans trois perspectives simultanément.",
+                "about_how_to_use": "Comment l'Utiliser",
+                "about_load_files": "<b>Charger des Fichiers :</b> Utilisez le menu Fichier → Charger Image/Étiquettes, ou tapez les chemins dans le panneau de droite",
+                "about_navigate": "<b>Naviguer :</b> La molette de la souris fait défiler les coupes, Ctrl+molette zoome",
+                "about_pan_rotate": "<b>Panoramique et Rotation :</b> Clic droit et glisser pour déplacer la vue, cliquez sur les boutons de rotation pour retourner",
+                "about_overlays": "<b>Superpositions :</b> Cochez \"Afficher la Superposition\" et ajustez le curseur de transparence",
+                "about_save": "<b>Enregistrer :</b> Fichier → Enregistrer Capture d'Écran (Ctrl+S) ou Volume (Ctrl+Shift+S)",
+                "about_shortcuts": "Raccourcis Clavier",
+                "about_open_image": "Ouvrir un fichier image",
+                "about_open_labels": "Ouvrir un fichier d'étiquettes",
+                "about_save_screenshot": "Enregistrer capture d'écran",
+                "about_save_volume": "Ouvrir le menu d'enregistrement de volume",
+                "about_reset": "Réinitialiser les vues et vider le cache",
+                "about_toggle_panel": "Basculer le panneau de contrôle",
+                "about_fit_views": "Ajuster toutes les vues à la fenêtre",
+                "about_show_dialog": "Afficher cette boîte de dialogue",
+                "about_scroll_slices": "Faire défiler les coupes",
+                "about_zoom": "Zoomer/Dézoomer",
+                "about_pan_view": "Panoramique de la vue",
+                "about_command_line": "Options de Ligne de Commande",
+                "about_command_help": "Exécutez <code>python nifti_viewer.py --help</code> pour les options complètes.<br>Exemples : <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "Support de Fichiers",
+                "about_file_formats": "Supporte les formats NIfTI (.nii, .nii.gz) et MetaImage (.mha, .mhd).",
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
@@ -474,6 +558,34 @@ class TranslationManager:
                 
                 # About dialog
                 "close": "Schließen",
+                
+                # About dialog content
+                "other_languages": "Andere Sprachen",
+                "select_language": "Sprache auswählen:",
+                "about_what_is": "Was ist dieser Viewer?",
+                "about_description": "Ein einfacher, schneller Viewer für medizinische Bilder. Betrachten Sie MRT-Scans, Überlagerungen und Segmentierungsmasken in drei Perspektiven gleichzeitig.",
+                "about_how_to_use": "Wie zu verwenden",
+                "about_load_files": "<b>Dateien laden:</b> Verwenden Sie Datei-Menü → Bild/Labels laden, oder geben Sie Pfade im rechten Panel ein",
+                "about_navigate": "<b>Navigation:</b> Mausrad scrollt durch Schichten, Strg+Rad zoomt hinein/heraus",
+                "about_pan_rotate": "<b>Schwenken & Drehen:</b> Rechtsklick-Ziehen zum Bewegen der Ansicht, Rotations-Buttons zum Umdrehen klicken",
+                "about_overlays": "<b>Überlagerungen:</b> \"Überlagerung anzeigen\" aktivieren und Transparenz-Schieber anpassen",
+                "about_save": "<b>Speichern:</b> Datei → Screenshot speichern (Strg+S) oder Volumen (Strg+Umschalt+S)",
+                "about_shortcuts": "Tastenkürzel",
+                "about_open_image": "Bilddatei öffnen",
+                "about_open_labels": "Label-Datei öffnen",
+                "about_save_screenshot": "Screenshot speichern",
+                "about_save_volume": "Volumen-Speichern-Menü öffnen",
+                "about_reset": "Ansichten zurücksetzen und Cache leeren",
+                "about_toggle_panel": "Kontrollpanel umschalten",
+                "about_fit_views": "Alle Ansichten an Fenster anpassen",
+                "about_show_dialog": "Diesen Dialog anzeigen",
+                "about_scroll_slices": "Durch Schichten scrollen",
+                "about_zoom": "Hinein-/Herauszoomen",
+                "about_pan_view": "Ansicht schwenken",
+                "about_command_line": "Kommandozeilen-Optionen",
+                "about_command_help": "Führen Sie <code>python nifti_viewer.py --help</code> für vollständige Optionen aus.<br>Beispiele: <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "Datei-Unterstützung",
+                "about_file_formats": "Unterstützt NIfTI (.nii, .nii.gz) und MetaImage (.mha, .mhd) Formate.",
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
@@ -591,6 +703,34 @@ class TranslationManager:
                 
                 # About dialog
                 "close": "閉じる",
+                
+                # About dialog content
+                "other_languages": "その他の言語",
+                "select_language": "言語を選択：",
+                "about_what_is": "このビューアとは？",
+                "about_description": "医療画像のためのシンプルで高速なビューア。MRIスキャン、オーバーレイ、セグメンテーションマスクを3つの視点で同時に表示します。",
+                "about_how_to_use": "使用方法",
+                "about_load_files": "<b>ファイル読み込み：</b>ファイルメニュー → 画像/ラベル読み込み、または右パネルでパスを入力",
+                "about_navigate": "<b>ナビゲーション：</b>マウスホイールでスライス移動、Ctrl+ホイールでズーム",
+                "about_pan_rotate": "<b>パン・回転：</b>右クリックドラッグでビュー移動、回転ボタンで反転",
+                "about_overlays": "<b>オーバーレイ：</b>「オーバーレイ表示」をチェックし、透明度スライダーを調整",
+                "about_save": "<b>保存：</b>ファイル → スクリーンショット保存 (Ctrl+S) またはボリューム (Ctrl+Shift+S)",
+                "about_shortcuts": "キーボードショートカット",
+                "about_open_image": "画像ファイルを開く",
+                "about_open_labels": "ラベルファイルを開く",
+                "about_save_screenshot": "スクリーンショット保存",
+                "about_save_volume": "ボリューム保存メニューを開く",
+                "about_reset": "ビューをリセットしキャッシュをクリア",
+                "about_toggle_panel": "コントロールパネル切り替え",
+                "about_fit_views": "すべてのビューをウィンドウに合わせる",
+                "about_show_dialog": "このダイアログを表示",
+                "about_scroll_slices": "スライス間をスクロール",
+                "about_zoom": "ズームイン/アウト",
+                "about_pan_view": "ビューをパン",
+                "about_command_line": "コマンドラインオプション",
+                "about_command_help": "完全なオプションは <code>python nifti_viewer.py --help</code> を実行してください。<br>例：<code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "ファイルサポート",
+                "about_file_formats": "NIfTI (.nii, .nii.gz) および MetaImage (.mha, .mhd) 形式をサポート。",
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
@@ -708,6 +848,34 @@ class TranslationManager:
                 
                 # About dialog
                 "close": "닫기",
+                
+                # About dialog content
+                "other_languages": "기타 언어",
+                "select_language": "언어 선택:",
+                "about_what_is": "이 뷰어란 무엇인가요?",
+                "about_description": "의료 영상을 위한 간단하고 빠른 뷰어입니다. MRI 스캔, 오버레이, 분할 마스크를 세 가지 관점에서 동시에 볼 수 있습니다.",
+                "about_how_to_use": "사용 방법",
+                "about_load_files": "<b>파일 로드:</b> 파일 메뉴 → 영상/라벨 로드 사용, 또는 오른쪽 패널에 경로 입력",
+                "about_navigate": "<b>탐색:</b> 마우스 휠로 슬라이스 스크롤, Ctrl+휠로 확대/축소",
+                "about_pan_rotate": "<b>팬 및 회전:</b> 우클릭 드래그로 뷰 이동, 회전 버튼 클릭으로 뒤집기",
+                "about_overlays": "<b>오버레이:</b> \"오버레이 표시\"를 체크하고 투명도 슬라이더 조정",
+                "about_save": "<b>저장:</b> 파일 → 스크린샷 저장 (Ctrl+S) 또는 볼륨 (Ctrl+Shift+S)",
+                "about_shortcuts": "키보드 단축키",
+                "about_open_image": "영상 파일 열기",
+                "about_open_labels": "라벨 파일 열기",
+                "about_save_screenshot": "스크린샷 저장",
+                "about_save_volume": "볼륨 저장 메뉴 열기",
+                "about_reset": "뷰 재설정 및 캐시 지우기",
+                "about_toggle_panel": "제어 패널 토글",
+                "about_fit_views": "모든 뷰를 창에 맞추기",
+                "about_show_dialog": "이 대화상자 표시",
+                "about_scroll_slices": "슬라이스 스크롤",
+                "about_zoom": "확대/축소",
+                "about_pan_view": "뷰 팬",
+                "about_command_line": "명령줄 옵션",
+                "about_command_help": "전체 옵션은 <code>python nifti_viewer.py --help</code>를 실행하세요.<br>예시: <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "파일 지원",
+                "about_file_formats": "NIfTI (.nii, .nii.gz) 및 MetaImage (.mha, .mhd) 형식을 지원합니다.",
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
@@ -825,6 +993,34 @@ class TranslationManager:
                 
                 # About dialog
                 "close": "Cerrar",
+                
+                # About dialog content
+                "other_languages": "Otros Idiomas",
+                "select_language": "Seleccionar idioma:",
+                "about_what_is": "¿Qué es este Visor?",
+                "about_description": "Un visor simple y rápido para imágenes médicas. Vea escaneos de resonancia magnética, superposiciones y máscaras de segmentación en tres perspectivas simultáneamente.",
+                "about_how_to_use": "Cómo Usar",
+                "about_load_files": "<b>Cargar Archivos:</b> Use el menú Archivo → Cargar Imagen/Etiquetas, o escriba rutas en el panel derecho",
+                "about_navigate": "<b>Navegar:</b> La rueda del ratón desplaza por las secciones, Ctrl+rueda hace zoom",
+                "about_pan_rotate": "<b>Panorámica y Rotación:</b> Clic derecho y arrastrar para mover la vista, clic en botones de rotación para voltear",
+                "about_overlays": "<b>Superposiciones:</b> Marque \"Mostrar Superposición\" y ajuste el deslizador de transparencia",
+                "about_save": "<b>Guardar:</b> Archivo → Guardar Captura de Pantalla (Ctrl+S) o Volumen (Ctrl+Shift+S)",
+                "about_shortcuts": "Atajos de Teclado",
+                "about_open_image": "Abrir archivo de imagen",
+                "about_open_labels": "Abrir archivo de etiquetas",
+                "about_save_screenshot": "Guardar captura de pantalla",
+                "about_save_volume": "Abrir menú de guardar volumen",
+                "about_reset": "Restablecer vistas y limpiar caché",
+                "about_toggle_panel": "Alternar panel de control",
+                "about_fit_views": "Ajustar todas las vistas a la ventana",
+                "about_show_dialog": "Mostrar este diálogo",
+                "about_scroll_slices": "Desplazar por las secciones",
+                "about_zoom": "Acercar/Alejar",
+                "about_pan_view": "Panorámica de la vista",
+                "about_command_line": "Opciones de Línea de Comandos",
+                "about_command_help": "Ejecute <code>python nifti_viewer.py --help</code> para opciones completas.<br>Ejemplos: <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "Soporte de Archivos",
+                "about_file_formats": "Soporta formatos NIfTI (.nii, .nii.gz) y MetaImage (.mha, .mhd).",
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
@@ -942,6 +1138,34 @@ class TranslationManager:
                 
                 # About dialog
                 "close": "關閉",
+                
+                # About dialog content
+                "other_languages": "其他語言",
+                "select_language": "選擇語言：",
+                "about_what_is": "什麼是醫學影像檢視器？",
+                "about_description": "簡單快速的醫學影像檢視工具。支援檢視磁共振(MRI)掃描影像、疊加圖層和分割遮罩，同時顯示三個角度的切面檢視。",
+                "about_how_to_use": "如何使用",
+                "about_load_files": "<b>載入檔案：</b>使用檔案選單 → 載入影像/標籤，或在右側面板輸入檔案路徑",
+                "about_navigate": "<b>導航操作：</b>滑鼠滾輪切換切片，Ctrl+滾輪縮放檢視",
+                "about_pan_rotate": "<b>平移旋轉：</b>右鍵拖曳移動檢視，點擊旋轉按鈕翻轉方向",
+                "about_overlays": "<b>疊加顯示：</b>勾選\"顯示疊加\"並調節透明度滑條",
+                "about_save": "<b>儲存：</b>檔案 → 儲存螢幕截圖 (Ctrl+S) 或儲存體資料 (Ctrl+Shift+S)",
+                "about_shortcuts": "快速鍵一覽",
+                "about_open_image": "開啟影像檔案",
+                "about_open_labels": "開啟標籤檔案",
+                "about_save_screenshot": "儲存螢幕截圖",
+                "about_save_volume": "開啟體資料儲存選單",
+                "about_reset": "重設檢視並清空快取",
+                "about_toggle_panel": "切換控制面板顯示",
+                "about_fit_views": "適應所有檢視到視窗",
+                "about_show_dialog": "顯示此對話框",
+                "about_scroll_slices": "切換切片",
+                "about_zoom": "縮放檢視",
+                "about_pan_view": "平移檢視",
+                "about_command_line": "命令列選項",
+                "about_command_help": "執行 <code>python nifti_viewer.py --help</code> 檢視完整選項。<br>範例：<code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "檔案支援",
+                "about_file_formats": "支援 NIfTI (.nii, .nii.gz) 和 MetaImage (.mha, .mhd) 格式。",
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
@@ -1059,6 +1283,34 @@ class TranslationManager:
                 
                 # About dialog
                 "close": "Chiudi",
+                
+                # About dialog content
+                "other_languages": "Altre Lingue",
+                "select_language": "Seleziona lingua:",
+                "about_what_is": "Cos'è questo Visualizzatore?",
+                "about_description": "Un visualizzatore semplice e veloce per immagini mediche. Visualizza scansioni MRI, sovrapposizioni e maschere di segmentazione in tre prospettive simultaneamente.",
+                "about_how_to_use": "Come Usare",
+                "about_load_files": "<b>Carica File:</b> Usa il menu File → Carica Immagine/Etichette, o digita i percorsi nel pannello destro",
+                "about_navigate": "<b>Navigare:</b> La rotella del mouse scorre le sezioni, Ctrl+rotella fa zoom",
+                "about_pan_rotate": "<b>Panoramica e Rotazione:</b> Clic destro e trascina per muovere la vista, clic sui pulsanti di rotazione per capovolgere",
+                "about_overlays": "<b>Sovrapposizioni:</b> Spunta \"Mostra Sovrapposizione\" e regola il cursore di trasparenza",
+                "about_save": "<b>Salva:</b> File → Salva Screenshot (Ctrl+S) o Volume (Ctrl+Shift+S)",
+                "about_shortcuts": "Scorciatoie da Tastiera",
+                "about_open_image": "Apri file immagine",
+                "about_open_labels": "Apri file etichette",
+                "about_save_screenshot": "Salva screenshot",
+                "about_save_volume": "Apri menu salva volume",
+                "about_reset": "Reimposta viste e svuota cache",
+                "about_toggle_panel": "Attiva/disattiva pannello di controllo",
+                "about_fit_views": "Adatta tutte le viste alla finestra",
+                "about_show_dialog": "Mostra questa finestra di dialogo",
+                "about_scroll_slices": "Scorri le sezioni",
+                "about_zoom": "Zoom avanti/indietro",
+                "about_pan_view": "Panoramica della vista",
+                "about_command_line": "Opzioni Riga di Comando",
+                "about_command_help": "Esegui <code>python nifti_viewer.py --help</code> per le opzioni complete.<br>Esempi: <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "Supporto File",
+                "about_file_formats": "Supporta formati NIfTI (.nii, .nii.gz) e MetaImage (.mha, .mhd).",
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
@@ -1176,6 +1428,34 @@ class TranslationManager:
                 
                 # About dialog
                 "close": "Fechar",
+                
+                # About dialog content
+                "other_languages": "Outros Idiomas",
+                "select_language": "Selecionar idioma:",
+                "about_what_is": "O que é este Visualizador?",
+                "about_description": "Um visualizador simples e rápido para imagens médicas. Visualize exames de ressonância magnética, sobreposições e máscaras de segmentação em três perspectivas simultaneamente.",
+                "about_how_to_use": "Como Usar",
+                "about_load_files": "<b>Carregar Arquivos:</b> Use o menu Arquivo → Carregar Imagem/Rótulos, ou digite caminhos no painel direito",
+                "about_navigate": "<b>Navegar:</b> A roda do mouse navega pelas fatias, Ctrl+roda faz zoom",
+                "about_pan_rotate": "<b>Panorâmica e Rotação:</b> Clique direito e arraste para mover a vista, clique nos botões de rotação para virar",
+                "about_overlays": "<b>Sobreposições:</b> Marque \"Mostrar Sobreposição\" e ajuste o controle deslizante de transparência",
+                "about_save": "<b>Salvar:</b> Arquivo → Salvar Captura de Tela (Ctrl+S) ou Volume (Ctrl+Shift+S)",
+                "about_shortcuts": "Atalhos do Teclado",
+                "about_open_image": "Abrir arquivo de imagem",
+                "about_open_labels": "Abrir arquivo de rótulos",
+                "about_save_screenshot": "Salvar captura de tela",
+                "about_save_volume": "Abrir menu salvar volume",
+                "about_reset": "Redefinir vistas e limpar cache",
+                "about_toggle_panel": "Alternar painel de controle",
+                "about_fit_views": "Ajustar todas as vistas à janela",
+                "about_show_dialog": "Mostrar esta caixa de diálogo",
+                "about_scroll_slices": "Navegar pelas fatias",
+                "about_zoom": "Aumentar/Diminuir zoom",
+                "about_pan_view": "Panorâmica da vista",
+                "about_command_line": "Opções de Linha de Comando",
+                "about_command_help": "Execute <code>python nifti_viewer.py --help</code> para opções completas.<br>Exemplos: <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "Suporte a Arquivos",
+                "about_file_formats": "Suporta formatos NIfTI (.nii, .nii.gz) e MetaImage (.mha, .mhd).",
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
@@ -1293,6 +1573,34 @@ class TranslationManager:
                 
                 # About dialog
                 "close": "Закрыть",
+                
+                # About dialog content
+                "other_languages": "Другие Языки",
+                "select_language": "Выберите язык:",
+                "about_what_is": "Что такое этот Просмотрщик?",
+                "about_description": "Простой и быстрый просмотрщик медицинских изображений. Просматривайте МРТ-сканы, наложения и маски сегментации в трех ракурсах одновременно.",
+                "about_how_to_use": "Как Использовать",
+                "about_load_files": "<b>Загрузка Файлов:</b> Используйте меню Файл → Загрузить Изображение/Метки, или введите пути в правой панели",
+                "about_navigate": "<b>Навигация:</b> Колесо мыши прокручивает срезы, Ctrl+колесо увеличивает/уменьшает",
+                "about_pan_rotate": "<b>Панорамирование и Поворот:</b> Правый клик и перетаскивание для перемещения вида, клик по кнопкам поворота для переворота",
+                "about_overlays": "<b>Наложения:</b> Отметьте \"Показать Наложение\" и настройте ползунок прозрачности",
+                "about_save": "<b>Сохранить:</b> Файл → Сохранить Скриншот (Ctrl+S) или Том (Ctrl+Shift+S)",
+                "about_shortcuts": "Горячие Клавиши",
+                "about_open_image": "Открыть файл изображения",
+                "about_open_labels": "Открыть файл меток",
+                "about_save_screenshot": "Сохранить скриншот",
+                "about_save_volume": "Открыть меню сохранения тома",
+                "about_reset": "Сбросить виды и очистить кеш",
+                "about_toggle_panel": "Переключить панель управления",
+                "about_fit_views": "Подогнать все виды к окну",
+                "about_show_dialog": "Показать этот диалог",
+                "about_scroll_slices": "Прокручивать срезы",
+                "about_zoom": "Увеличить/Уменьшить",
+                "about_pan_view": "Панорамирование вида",
+                "about_command_line": "Опции Командной Строки",
+                "about_command_help": "Запустите <code>python nifti_viewer.py --help</code> для полных опций.<br>Примеры: <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "Поддержка Файлов",
+                "about_file_formats": "Поддерживает форматы NIfTI (.nii, .nii.gz) и MetaImage (.mha, .mhd).",
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
@@ -2603,7 +2911,8 @@ class PreloadWorker(QRunnable):
 
 class AboutDialog(QDialog):
     """
-    About dialog with trilingual (English/Chinese/French) support and software information.
+    About dialog with multilingual support (11 languages) and software information.
+    Includes dedicated tabs for English/Chinese/French plus selectable other languages.
     """
 
     def __init__(self, parent=None):
@@ -2623,6 +2932,7 @@ class AboutDialog(QDialog):
         self.create_english_tab()
         self.create_chinese_tab()
         self.create_french_tab()
+        self.create_other_languages_tab()
 
         # Close button
         close_btn = QPushButton(tr("close"))
@@ -2685,7 +2995,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
 
         # Version info
-        version_label = QLabel("Version 0.1.4")
+        version_label = QLabel("Version 0.1.5")
         version_label.setStyleSheet(
             "font-size: 14px; color: #ccc; margin-bottom: 15px;"
         )
@@ -2757,7 +3067,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
 
         # Version info
-        version_label = QLabel("版本 0.1.4")
+        version_label = QLabel("版本 0.1.5")
         version_label.setStyleSheet(
             "font-size: 14px; color: #ccc; margin-bottom: 15px;"
         )
@@ -2829,7 +3139,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
 
         # Version info
-        version_label = QLabel("Version 0.1.4")
+        version_label = QLabel("Version 0.1.5")
         version_label.setStyleSheet(
             "font-size: 14px; color: #ccc; margin-bottom: 15px;"
         )
@@ -2882,6 +3192,159 @@ class AboutDialog(QDialog):
 
         scroll_area.setWidget(content_widget)
         self.tab_widget.addTab(scroll_area, tr("french"))
+
+    def create_other_languages_tab(self) -> None:
+        """Create Other Languages tab with language selector."""
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
+
+        # Language selector
+        selector_layout = QHBoxLayout()
+        selector_label = QLabel(tr("select_language"))
+        selector_label.setStyleSheet("font-size: 14px; color: #ccc; margin: 10px 0;")
+        
+        self.language_combo = QComboBox()
+        self.language_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #4a4a4a;
+                color: white;
+                border: 1px solid #555;
+                padding: 5px;
+                font-size: 12px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid white;
+                margin-right: 5px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #4a4a4a;
+                color: white;
+                selection-background-color: #4a90e2;
+            }
+        """)
+        
+        # Add other language options (excluding en, zh, fr which have dedicated tabs)
+        other_languages = [
+            ("de", tr("german")),
+            ("ja", tr("japanese")), 
+            ("ko", tr("korean")),
+            ("es", tr("spanish")),
+            ("zh-TW", tr("traditional_chinese")),
+            ("it", tr("italian")),
+            ("pt", tr("portuguese")),
+            ("ru", tr("russian"))
+        ]
+        
+        for code, name in other_languages:
+            self.language_combo.addItem(name, code)
+        
+        self.language_combo.currentTextChanged.connect(self.update_other_language_content)
+        
+        selector_layout.addWidget(selector_label)
+        selector_layout.addWidget(self.language_combo)
+        selector_layout.addStretch()
+        layout.addLayout(selector_layout)
+
+        # Content area
+        self.other_content_widget = QWidget()
+        self.other_content_layout = QVBoxLayout(self.other_content_widget)
+        layout.addWidget(self.other_content_widget)
+
+        # Initialize with first language
+        self.update_other_language_content()
+
+        scroll_area.setWidget(content_widget)
+        self.tab_widget.addTab(scroll_area, tr("other_languages"))
+
+    def update_other_language_content(self) -> None:
+        """Update the content based on selected language."""
+        # Clear existing content
+        while self.other_content_layout.count():
+            child = self.other_content_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        # Get selected language
+        current_data = self.language_combo.currentData()
+        if not current_data:
+            return
+            
+        # Store current language and temporarily switch to selected language
+        original_language = get_current_language()
+        set_language(current_data)
+
+        # Main title
+        title_label = QLabel(tr("window_title"))
+        title_label.setStyleSheet(
+            "font-size: 18px; font-weight: bold; color: #4a90e2; margin-bottom: 10px;"
+        )
+        title_label.setAlignment(Qt.AlignCenter)
+        self.other_content_layout.addWidget(title_label)
+
+        # Version info
+        version_label = QLabel("Version 0.1.5")
+        version_label.setStyleSheet(
+            "font-size: 14px; color: #ccc; margin-bottom: 15px;"
+        )
+        version_label.setAlignment(Qt.AlignCenter)
+        self.other_content_layout.addWidget(version_label)
+
+        # Description
+        description = QTextEdit()
+        description.setReadOnly(True)
+        description.setMaximumHeight(300)
+        
+        # Build HTML content using translations
+        html_content = f"""
+        <h3 style="color: #4a90e2;">{tr("about_what_is")}</h3>
+        <p>{tr("about_description")}</p>
+        
+        <h3 style="color: #4a90e2;">{tr("about_how_to_use")}</h3>
+        <ul>
+            <li>{tr("about_load_files")}</li>
+            <li>{tr("about_navigate")}</li>
+            <li>{tr("about_pan_rotate")}</li>
+            <li>{tr("about_overlays")}</li>
+            <li>{tr("about_save")}</li>
+        </ul>
+        
+        <h3 style="color: #4a90e2;">{tr("about_shortcuts")}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr><td style="padding: 4px;"><b>Ctrl+O</b></td><td style="padding: 4px;">{tr("about_open_image")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+L</b></td><td style="padding: 4px;">{tr("about_open_labels")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+S</b></td><td style="padding: 4px;">{tr("about_save_screenshot")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+Shift+S</b></td><td style="padding: 4px;">{tr("about_save_volume")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+R</b></td><td style="padding: 4px;">{tr("about_reset")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+T</b></td><td style="padding: 4px;">{tr("about_toggle_panel")}</td></tr>
+            <tr><td style="padding: 4px;"><b>F</b></td><td style="padding: 4px;">{tr("about_fit_views")}</td></tr>
+            <tr><td style="padding: 4px;"><b>F1</b></td><td style="padding: 4px;">{tr("about_show_dialog")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Wheel</b></td><td style="padding: 4px;">{tr("about_scroll_slices")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+Wheel</b></td><td style="padding: 4px;">{tr("about_zoom")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Right-drag</b></td><td style="padding: 4px;">{tr("about_pan_view")}</td></tr>
+        </table>
+        
+        <h3 style="color: #4a90e2;">{tr("about_command_line")}</h3>
+        <p>{tr("about_command_help")}</p>
+        
+        <h3 style="color: #4a90e2;">{tr("about_file_support")}</h3>
+        <p>{tr("about_file_formats")}</p>
+        """
+        
+        description.setHtml(html_content)
+        self.other_content_layout.addWidget(description)
+
+        # Restore original language
+        set_language(original_language)
 
 
 class SliceView(QGraphicsView):

@@ -126,6 +126,14 @@ class TranslationManager:
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
                 
                 # Control panel groups
                 "file_operations": "File Operations",
@@ -226,6 +234,14 @@ class TranslationManager:
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
                 
                 # Control panel groups
                 "file_operations": "文件操作",
@@ -326,6 +342,14 @@ class TranslationManager:
                 "english": "English",
                 "chinese": "中文",
                 "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
                 
                 # Control panel groups
                 "file_operations": "Opérations sur les Fichiers",
@@ -366,6 +390,870 @@ class TranslationManager:
                 "apply_to_all": "Appliquer à Tout",
                 "normal": "Normal",
                 "bold": "Gras",
+            },
+            "de": {
+                # Window titles
+                "window_title": "Medizinischer Bildviewer",
+                "about_title": "Über den Medizinischen Bildviewer",
+                
+                # Menu items
+                "menu_file": "Datei",
+                "menu_view": "Ansicht",
+                "menu_help": "Hilfe",
+                "load_image": "Bild laden...",
+                "load_labels": "Labels laden...",
+                "save": "Speichern",
+                "save_image": "Nur Bild...",
+                "save_label": "Nur Label...",
+                "save_overlay": "Überlagertes Bild...",
+                "save_screenshot": "Screenshot speichern...",
+                "reset": "Zurücksetzen",
+                "exit": "Beenden",
+                "fit_all_views": "Alle Ansichten anpassen",
+                "toggle_control_panel": "Kontrollpanel umschalten",
+                "about": "Über...",
+                "language": "Sprache",
+                
+                # Status messages
+                "status_ready": "Bereit - Laden Sie ein Bild zum Starten",
+                "status_loading_image": "Lade Bild...",
+                "status_loading_labels": "Lade Labels...",
+                "status_loading_image_path": "Lade Bild vom Pfad...",
+                "status_loading_labels_path": "Lade Labels vom Pfad...",
+                "status_load_failed": "Laden fehlgeschlagen",
+                "position": "Position:",
+                
+                # Control panel
+                "controls": "Steuerung",
+                "load_image_btn": "Bild laden (Strg+O)",
+                "load_labels_btn": "Labels laden (Strg+L)",
+                "reset_btn": "Zurücksetzen (Strg+R)",
+                "image_path": "Bildpfad:",
+                "update_image": "Bild aktualisieren",
+                "label_path": "Label-Pfad:",
+                "update_labels": "Labels aktualisieren",
+                "overlay_settings": "Überlagerungs-Einstellungen",
+                "show_overlay": "Überlagerung anzeigen",
+                "alpha": "Alpha:",
+                "label_colors": "Label-Farben",
+                "no_labels_found": "Keine Labels gefunden",
+                "no_labels_loaded": "Keine Labels geladen",
+                "label_prefix": "Label",
+                
+                # View titles
+                "axial_view": "Axial (XY)",
+                "sagittal_view": "Sagittal (YZ)",
+                "coronal_view": "Koronal (XZ)",
+                
+                # About dialog
+                "close": "Schließen",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "Datei-Operationen",
+                "view_controls": "Ansichts-Steuerung",
+                "overlay_controls": "Überlagerungs-Steuerung",
+                "measurement_tools": "Mess-Werkzeuge",
+                "measurement_settings": "Mess-Einstellungen",
+                
+                # Control panel elements
+                "no_image_loaded": "Kein Bild geladen...",
+                "no_labels_loaded_placeholder": "Keine Labels geladen...",
+                "slice": "Schnitt:",
+                "rotate_90": "90° drehen",
+                "reset_to_defaults": "Auf Standard zurücksetzen",
+                "alpha_label": "Alpha: 0.50",
+                
+                # View names
+                "axial": "Axial",
+                "sagittal": "Sagittal",
+                "coronal": "Koronal",
+                
+                # Measurement tools
+                "line_tool": "Linien-Werkzeug",
+                "eraser": "Radierer",
+                "export_csv": "CSV exportieren",
+                "measurements": "Messungen:",
+                "select_all": "Alle auswählen",
+                "deselect_all": "Alle abwählen",
+                "line_width": "Linienbreite:",
+                "line_color": "Linienfarbe:",
+                "text_color": "Textfarbe:",
+                "font_size": "Schriftgröße:",
+                "font_weight": "Schriftstärke:",
+                "auto_snap": "Auto-Einrasten:",
+                "enable_endpoint_snapping": "Endpunkt-Einrasten aktivieren",
+                "snap_distance": "Einrast-Abstand:",
+                "apply_to_selected": "Auf Ausgewählte anwenden",
+                "apply_to_all": "Auf Alle anwenden",
+                "normal": "Normal",
+                "bold": "Fett",
+            },
+            "ja": {
+                # Window titles
+                "window_title": "医療画像ビューア",
+                "about_title": "医療画像ビューアについて",
+                
+                # Menu items
+                "menu_file": "ファイル",
+                "menu_view": "表示",
+                "menu_help": "ヘルプ",
+                "load_image": "画像を読み込み...",
+                "load_labels": "ラベルを読み込み...",
+                "save": "保存",
+                "save_image": "画像のみ...",
+                "save_label": "ラベルのみ...",
+                "save_overlay": "オーバーレイ画像...",
+                "save_screenshot": "スクリーンショットを保存...",
+                "reset": "リセット",
+                "exit": "終了",
+                "fit_all_views": "すべてのビューに合わせる",
+                "toggle_control_panel": "コントロールパネルの切り替え",
+                "about": "について...",
+                "language": "言語",
+                
+                # Status messages
+                "status_ready": "準備完了 - 開始するには画像を読み込んでください",
+                "status_loading_image": "画像を読み込み中...",
+                "status_loading_labels": "ラベルを読み込み中...",
+                "status_loading_image_path": "パスから画像を読み込み中...",
+                "status_loading_labels_path": "パスからラベルを読み込み中...",
+                "status_load_failed": "読み込みに失敗しました",
+                "position": "位置:",
+                
+                # Control panel
+                "controls": "コントロール",
+                "load_image_btn": "画像を読み込み (Ctrl+O)",
+                "load_labels_btn": "ラベルを読み込み (Ctrl+L)",
+                "reset_btn": "リセット (Ctrl+R)",
+                "image_path": "画像パス:",
+                "update_image": "画像を更新",
+                "label_path": "ラベルパス:",
+                "update_labels": "ラベルを更新",
+                "overlay_settings": "オーバーレイ設定",
+                "show_overlay": "オーバーレイを表示",
+                "alpha": "アルファ:",
+                "label_colors": "ラベル色",
+                "no_labels_found": "ラベルが見つかりません",
+                "no_labels_loaded": "ラベルが読み込まれていません",
+                "label_prefix": "ラベル",
+                
+                # View titles
+                "axial_view": "軸位 (XY)",
+                "sagittal_view": "矢状 (YZ)",
+                "coronal_view": "冠状 (XZ)",
+                
+                # About dialog
+                "close": "閉じる",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "ファイル操作",
+                "view_controls": "表示コントロール",
+                "overlay_controls": "オーバーレイコントロール",
+                "measurement_tools": "測定ツール",
+                "measurement_settings": "測定設定",
+                
+                # Control panel elements
+                "no_image_loaded": "画像が読み込まれていません...",
+                "no_labels_loaded_placeholder": "ラベルが読み込まれていません...",
+                "slice": "スライス:",
+                "rotate_90": "90°回転",
+                "reset_to_defaults": "デフォルトにリセット",
+                "alpha_label": "アルファ: 0.50",
+                
+                # View names
+                "axial": "軸位",
+                "sagittal": "矢状",
+                "coronal": "冠状",
+                
+                # Measurement tools
+                "line_tool": "ラインツール",
+                "eraser": "消しゴム",
+                "export_csv": "CSV出力",
+                "measurements": "測定:",
+                "select_all": "すべて選択",
+                "deselect_all": "すべて選択解除",
+                "line_width": "線の太さ:",
+                "line_color": "線の色:",
+                "text_color": "テキスト色:",
+                "font_size": "フォントサイズ:",
+                "font_weight": "フォントの太さ:",
+                "auto_snap": "自動スナップ:",
+                "enable_endpoint_snapping": "エンドポイントスナップを有効化",
+                "snap_distance": "スナップ距離:",
+                "apply_to_selected": "選択項目に適用",
+                "apply_to_all": "すべてに適用",
+                "normal": "標準",
+                "bold": "太字",
+            },
+            "ko": {
+                # Window titles
+                "window_title": "의료 영상 뷰어",
+                "about_title": "의료 영상 뷰어 정보",
+                
+                # Menu items
+                "menu_file": "파일",
+                "menu_view": "보기",
+                "menu_help": "도움말",
+                "load_image": "이미지 불러오기...",
+                "load_labels": "라벨 불러오기...",
+                "save": "저장",
+                "save_image": "이미지만...",
+                "save_label": "라벨만...",
+                "save_overlay": "오버레이 이미지...",
+                "save_screenshot": "스크린샷 저장...",
+                "reset": "초기화",
+                "exit": "종료",
+                "fit_all_views": "모든 뷰에 맞춤",
+                "toggle_control_panel": "제어판 토글",
+                "about": "정보...",
+                "language": "언어",
+                
+                # Status messages
+                "status_ready": "준비 완료 - 시작하려면 이미지를 불러오세요",
+                "status_loading_image": "이미지 불러오는 중...",
+                "status_loading_labels": "라벨 불러오는 중...",
+                "status_loading_image_path": "경로에서 이미지 불러오는 중...",
+                "status_loading_labels_path": "경로에서 라벨 불러오는 중...",
+                "status_load_failed": "불러오기 실패",
+                "position": "위치:",
+                
+                # Control panel
+                "controls": "제어",
+                "load_image_btn": "이미지 불러오기 (Ctrl+O)",
+                "load_labels_btn": "라벨 불러오기 (Ctrl+L)",
+                "reset_btn": "초기화 (Ctrl+R)",
+                "image_path": "이미지 경로:",
+                "update_image": "이미지 업데이트",
+                "label_path": "라벨 경로:",
+                "update_labels": "라벨 업데이트",
+                "overlay_settings": "오버레이 설정",
+                "show_overlay": "오버레이 표시",
+                "alpha": "알파:",
+                "label_colors": "라벨 색상",
+                "no_labels_found": "라벨을 찾을 수 없음",
+                "no_labels_loaded": "라벨이 로드되지 않음",
+                "label_prefix": "라벨",
+                
+                # View titles
+                "axial_view": "축상 (XY)",
+                "sagittal_view": "시상 (YZ)",
+                "coronal_view": "관상 (XZ)",
+                
+                # About dialog
+                "close": "닫기",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "파일 작업",
+                "view_controls": "뷰 컨트롤",
+                "overlay_controls": "오버레이 컨트롤",
+                "measurement_tools": "측정 도구",
+                "measurement_settings": "측정 설정",
+                
+                # Control panel elements
+                "no_image_loaded": "이미지가 로드되지 않음...",
+                "no_labels_loaded_placeholder": "라벨이 로드되지 않음...",
+                "slice": "슬라이스:",
+                "rotate_90": "90° 회전",
+                "reset_to_defaults": "기본값으로 초기화",
+                "alpha_label": "알파: 0.50",
+                
+                # View names
+                "axial": "축상",
+                "sagittal": "시상",
+                "coronal": "관상",
+                
+                # Measurement tools
+                "line_tool": "라인 도구",
+                "eraser": "지우개",
+                "export_csv": "CSV 내보내기",
+                "measurements": "측정:",
+                "select_all": "모두 선택",
+                "deselect_all": "모두 선택 해제",
+                "line_width": "선 두께:",
+                "line_color": "선 색상:",
+                "text_color": "텍스트 색상:",
+                "font_size": "폰트 크기:",
+                "font_weight": "폰트 굵기:",
+                "auto_snap": "자동 스냅:",
+                "enable_endpoint_snapping": "끝점 스냅 활성화",
+                "snap_distance": "스냅 거리:",
+                "apply_to_selected": "선택항목에 적용",
+                "apply_to_all": "모든 항목에 적용",
+                "normal": "보통",
+                "bold": "굵게",
+            },
+            "es": {
+                # Window titles
+                "window_title": "Visor de Imágenes Médicas",
+                "about_title": "Acerca del Visor de Imágenes Médicas",
+                
+                # Menu items
+                "menu_file": "Archivo",
+                "menu_view": "Ver",
+                "menu_help": "Ayuda",
+                "load_image": "Cargar Imagen...",
+                "load_labels": "Cargar Etiquetas...",
+                "save": "Guardar",
+                "save_image": "Solo Imagen...",
+                "save_label": "Solo Etiqueta...",
+                "save_overlay": "Imagen Superpuesta...",
+                "save_screenshot": "Guardar Captura de Pantalla...",
+                "reset": "Restablecer",
+                "exit": "Salir",
+                "fit_all_views": "Ajustar Todas las Vistas",
+                "toggle_control_panel": "Alternar Panel de Control",
+                "about": "Acerca de...",
+                "language": "Idioma",
+                
+                # Status messages
+                "status_ready": "Listo - Cargue una imagen para comenzar",
+                "status_loading_image": "Cargando imagen...",
+                "status_loading_labels": "Cargando etiquetas...",
+                "status_loading_image_path": "Cargando imagen desde ruta...",
+                "status_loading_labels_path": "Cargando etiquetas desde ruta...",
+                "status_load_failed": "Error al cargar",
+                "position": "Posición:",
+                
+                # Control panel
+                "controls": "Controles",
+                "load_image_btn": "Cargar Imagen (Ctrl+O)",
+                "load_labels_btn": "Cargar Etiquetas (Ctrl+L)",
+                "reset_btn": "Restablecer (Ctrl+R)",
+                "image_path": "Ruta de Imagen:",
+                "update_image": "Actualizar Imagen",
+                "label_path": "Ruta de Etiquetas:",
+                "update_labels": "Actualizar Etiquetas",
+                "overlay_settings": "Configuración de Superposición",
+                "show_overlay": "Mostrar Superposición",
+                "alpha": "Alfa:",
+                "label_colors": "Colores de Etiquetas",
+                "no_labels_found": "No se encontraron etiquetas",
+                "no_labels_loaded": "No se cargaron etiquetas",
+                "label_prefix": "Etiqueta",
+                
+                # View titles
+                "axial_view": "Axial (XY)",
+                "sagittal_view": "Sagital (YZ)",
+                "coronal_view": "Coronal (XZ)",
+                
+                # About dialog
+                "close": "Cerrar",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "Operaciones de Archivo",
+                "view_controls": "Controles de Vista",
+                "overlay_controls": "Controles de Superposición",
+                "measurement_tools": "Herramientas de Medición",
+                "measurement_settings": "Configuración de Medición",
+                
+                # Control panel elements
+                "no_image_loaded": "No hay imagen cargada...",
+                "no_labels_loaded_placeholder": "No hay etiquetas cargadas...",
+                "slice": "Corte:",
+                "rotate_90": "Rotar 90°",
+                "reset_to_defaults": "Restablecer por Defecto",
+                "alpha_label": "Alfa: 0.50",
+                
+                # View names
+                "axial": "Axial",
+                "sagittal": "Sagital",
+                "coronal": "Coronal",
+                
+                # Measurement tools
+                "line_tool": "Herramienta de Línea",
+                "eraser": "Borrador",
+                "export_csv": "Exportar CSV",
+                "measurements": "Mediciones:",
+                "select_all": "Seleccionar Todo",
+                "deselect_all": "Deseleccionar Todo",
+                "line_width": "Ancho de Línea:",
+                "line_color": "Color de Línea:",
+                "text_color": "Color de Texto:",
+                "font_size": "Tamaño de Fuente:",
+                "font_weight": "Peso de Fuente:",
+                "auto_snap": "Ajuste Automático:",
+                "enable_endpoint_snapping": "Activar ajuste de extremos",
+                "snap_distance": "Distancia de Ajuste:",
+                "apply_to_selected": "Aplicar a Seleccionados",
+                "apply_to_all": "Aplicar a Todos",
+                "normal": "Normal",
+                "bold": "Negrita",
+            },
+            "zh-TW": {
+                # Window titles
+                "window_title": "醫學影像檢視器",
+                "about_title": "關於醫學影像檢視器",
+                
+                # Menu items
+                "menu_file": "檔案",
+                "menu_view": "檢視",
+                "menu_help": "說明",
+                "load_image": "載入影像...",
+                "load_labels": "載入標籤...",
+                "save": "儲存",
+                "save_image": "僅影像...",
+                "save_label": "僅標籤...",
+                "save_overlay": "疊加影像...",
+                "save_screenshot": "儲存螢幕截圖...",
+                "reset": "重設",
+                "exit": "結束",
+                "fit_all_views": "適應所有檢視",
+                "toggle_control_panel": "切換控制面板",
+                "about": "關於...",
+                "language": "語言",
+                
+                # Status messages
+                "status_ready": "就緒 - 載入影像開始使用",
+                "status_loading_image": "正在載入影像...",
+                "status_loading_labels": "正在載入標籤...",
+                "status_loading_image_path": "正在從路徑載入影像...",
+                "status_loading_labels_path": "正在從路徑載入標籤...",
+                "status_load_failed": "載入失敗",
+                "position": "位置:",
+                
+                # Control panel
+                "controls": "控制",
+                "load_image_btn": "載入影像 (Ctrl+O)",
+                "load_labels_btn": "載入標籤 (Ctrl+L)",
+                "reset_btn": "重設 (Ctrl+R)",
+                "image_path": "影像路徑:",
+                "update_image": "更新影像",
+                "label_path": "標籤路徑:",
+                "update_labels": "更新標籤",
+                "overlay_settings": "疊加設定",
+                "show_overlay": "顯示疊加",
+                "alpha": "透明度:",
+                "label_colors": "標籤色彩",
+                "no_labels_found": "未找到標籤",
+                "no_labels_loaded": "未載入標籤",
+                "label_prefix": "標籤",
+                
+                # View titles
+                "axial_view": "軸向 (XY)",
+                "sagittal_view": "矢狀 (YZ)",
+                "coronal_view": "冠狀 (XZ)",
+                
+                # About dialog
+                "close": "關閉",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "檔案操作",
+                "view_controls": "檢視控制",
+                "overlay_controls": "疊加控制",
+                "measurement_tools": "測量工具",
+                "measurement_settings": "測量設定",
+                
+                # Control panel elements
+                "no_image_loaded": "未載入影像...",
+                "no_labels_loaded_placeholder": "未載入標籤...",
+                "slice": "切片:",
+                "rotate_90": "旋轉90°",
+                "reset_to_defaults": "重設為預設值",
+                "alpha_label": "透明度: 0.50",
+                
+                # View names
+                "axial": "軸向",
+                "sagittal": "矢狀",
+                "coronal": "冠狀",
+                
+                # Measurement tools
+                "line_tool": "線條工具",
+                "eraser": "橡皮擦",
+                "export_csv": "匯出CSV",
+                "measurements": "測量:",
+                "select_all": "全選",
+                "deselect_all": "取消全選",
+                "line_width": "線寬:",
+                "line_color": "線條色彩:",
+                "text_color": "文字色彩:",
+                "font_size": "字型大小:",
+                "font_weight": "字型粗細:",
+                "auto_snap": "自動吸附:",
+                "enable_endpoint_snapping": "啟用端點吸附",
+                "snap_distance": "吸附距離:",
+                "apply_to_selected": "套用至已選取",
+                "apply_to_all": "套用至全部",
+                "normal": "一般",
+                "bold": "粗體",
+            },
+            "it": {
+                # Window titles
+                "window_title": "Visualizzatore di Immagini Mediche",
+                "about_title": "Informazioni sul Visualizzatore di Immagini Mediche",
+                
+                # Menu items
+                "menu_file": "File",
+                "menu_view": "Visualizza",
+                "menu_help": "Aiuto",
+                "load_image": "Carica Immagine...",
+                "load_labels": "Carica Etichette...",
+                "save": "Salva",
+                "save_image": "Solo Immagine...",
+                "save_label": "Solo Etichetta...",
+                "save_overlay": "Immagine Sovrapposta...",
+                "save_screenshot": "Salva Screenshot...",
+                "reset": "Reimposta",
+                "exit": "Esci",
+                "fit_all_views": "Adatta Tutte le Viste",
+                "toggle_control_panel": "Attiva/Disattiva Pannello di Controllo",
+                "about": "Informazioni...",
+                "language": "Lingua",
+                
+                # Status messages
+                "status_ready": "Pronto - Carica un'immagine per iniziare",
+                "status_loading_image": "Caricamento immagine...",
+                "status_loading_labels": "Caricamento etichette...",
+                "status_loading_image_path": "Caricamento immagine dal percorso...",
+                "status_loading_labels_path": "Caricamento etichette dal percorso...",
+                "status_load_failed": "Caricamento fallito",
+                "position": "Posizione:",
+                
+                # Control panel
+                "controls": "Controlli",
+                "load_image_btn": "Carica Immagine (Ctrl+O)",
+                "load_labels_btn": "Carica Etichette (Ctrl+L)",
+                "reset_btn": "Reimposta (Ctrl+R)",
+                "image_path": "Percorso Immagine:",
+                "update_image": "Aggiorna Immagine",
+                "label_path": "Percorso Etichette:",
+                "update_labels": "Aggiorna Etichette",
+                "overlay_settings": "Impostazioni Sovrapposizione",
+                "show_overlay": "Mostra Sovrapposizione",
+                "alpha": "Alfa:",
+                "label_colors": "Colori Etichette",
+                "no_labels_found": "Nessuna etichetta trovata",
+                "no_labels_loaded": "Nessuna etichetta caricata",
+                "label_prefix": "Etichetta",
+                
+                # View titles
+                "axial_view": "Assiale (XY)",
+                "sagittal_view": "Sagittale (YZ)",
+                "coronal_view": "Coronale (XZ)",
+                
+                # About dialog
+                "close": "Chiudi",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "Operazioni File",
+                "view_controls": "Controlli Vista",
+                "overlay_controls": "Controlli Sovrapposizione",
+                "measurement_tools": "Strumenti di Misurazione",
+                "measurement_settings": "Impostazioni Misurazione",
+                
+                # Control panel elements
+                "no_image_loaded": "Nessuna immagine caricata...",
+                "no_labels_loaded_placeholder": "Nessuna etichetta caricata...",
+                "slice": "Fetta:",
+                "rotate_90": "Ruota 90°",
+                "reset_to_defaults": "Ripristina Predefiniti",
+                "alpha_label": "Alfa: 0.50",
+                
+                # View names
+                "axial": "Assiale",
+                "sagittal": "Sagittale",
+                "coronal": "Coronale",
+                
+                # Measurement tools
+                "line_tool": "Strumento Linea",
+                "eraser": "Gomma",
+                "export_csv": "Esporta CSV",
+                "measurements": "Misurazioni:",
+                "select_all": "Seleziona Tutto",
+                "deselect_all": "Deseleziona Tutto",
+                "line_width": "Spessore Linea:",
+                "line_color": "Colore Linea:",
+                "text_color": "Colore Testo:",
+                "font_size": "Dimensione Font:",
+                "font_weight": "Peso Font:",
+                "auto_snap": "Aggancio Automatico:",
+                "enable_endpoint_snapping": "Abilita aggancio estremi",
+                "snap_distance": "Distanza Aggancio:",
+                "apply_to_selected": "Applica ai Selezionati",
+                "apply_to_all": "Applica a Tutti",
+                "normal": "Normale",
+                "bold": "Grassetto",
+            },
+            "pt": {
+                # Window titles
+                "window_title": "Visualizador de Imagens Médicas",
+                "about_title": "Sobre o Visualizador de Imagens Médicas",
+                
+                # Menu items
+                "menu_file": "Arquivo",
+                "menu_view": "Visualizar",
+                "menu_help": "Ajuda",
+                "load_image": "Carregar Imagem...",
+                "load_labels": "Carregar Etiquetas...",
+                "save": "Salvar",
+                "save_image": "Apenas Imagem...",
+                "save_label": "Apenas Etiqueta...",
+                "save_overlay": "Imagem Sobreposta...",
+                "save_screenshot": "Salvar Screenshot...",
+                "reset": "Redefinir",
+                "exit": "Sair",
+                "fit_all_views": "Ajustar Todas as Visualizações",
+                "toggle_control_panel": "Alternar Painel de Controle",
+                "about": "Sobre...",
+                "language": "Idioma",
+                
+                # Status messages
+                "status_ready": "Pronto - Carregue uma imagem para começar",
+                "status_loading_image": "Carregando imagem...",
+                "status_loading_labels": "Carregando etiquetas...",
+                "status_loading_image_path": "Carregando imagem do caminho...",
+                "status_loading_labels_path": "Carregando etiquetas do caminho...",
+                "status_load_failed": "Falha no carregamento",
+                "position": "Posição:",
+                
+                # Control panel
+                "controls": "Controles",
+                "load_image_btn": "Carregar Imagem (Ctrl+O)",
+                "load_labels_btn": "Carregar Etiquetas (Ctrl+L)",
+                "reset_btn": "Redefinir (Ctrl+R)",
+                "image_path": "Caminho da Imagem:",
+                "update_image": "Atualizar Imagem",
+                "label_path": "Caminho das Etiquetas:",
+                "update_labels": "Atualizar Etiquetas",
+                "overlay_settings": "Configurações de Sobreposição",
+                "show_overlay": "Mostrar Sobreposição",
+                "alpha": "Alfa:",
+                "label_colors": "Cores das Etiquetas",
+                "no_labels_found": "Nenhuma etiqueta encontrada",
+                "no_labels_loaded": "Nenhuma etiqueta carregada",
+                "label_prefix": "Etiqueta",
+                
+                # View titles
+                "axial_view": "Axial (XY)",
+                "sagittal_view": "Sagital (YZ)",
+                "coronal_view": "Coronal (XZ)",
+                
+                # About dialog
+                "close": "Fechar",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "Operações de Arquivo",
+                "view_controls": "Controles de Visualização",
+                "overlay_controls": "Controles de Sobreposição",
+                "measurement_tools": "Ferramentas de Medição",
+                "measurement_settings": "Configurações de Medição",
+                
+                # Control panel elements
+                "no_image_loaded": "Nenhuma imagem carregada...",
+                "no_labels_loaded_placeholder": "Nenhuma etiqueta carregada...",
+                "slice": "Fatia:",
+                "rotate_90": "Girar 90°",
+                "reset_to_defaults": "Redefinir para Padrão",
+                "alpha_label": "Alfa: 0.50",
+                
+                # View names
+                "axial": "Axial",
+                "sagittal": "Sagital",
+                "coronal": "Coronal",
+                
+                # Measurement tools
+                "line_tool": "Ferramenta de Linha",
+                "eraser": "Borracha",
+                "export_csv": "Exportar CSV",
+                "measurements": "Medições:",
+                "select_all": "Selecionar Tudo",
+                "deselect_all": "Desselecionar Tudo",
+                "line_width": "Largura da Linha:",
+                "line_color": "Cor da Linha:",
+                "text_color": "Cor do Texto:",
+                "font_size": "Tamanho da Fonte:",
+                "font_weight": "Peso da Fonte:",
+                "auto_snap": "Ajuste Automático:",
+                "enable_endpoint_snapping": "Ativar ajuste de extremidades",
+                "snap_distance": "Distância de Ajuste:",
+                "apply_to_selected": "Aplicar aos Selecionados",
+                "apply_to_all": "Aplicar a Todos",
+                "normal": "Normal",
+                "bold": "Negrito",
+            },
+            "ru": {
+                # Window titles
+                "window_title": "Просмотрщик Медицинских Изображений",
+                "about_title": "О Просмотрщике Медицинских Изображений",
+                
+                # Menu items
+                "menu_file": "Файл",
+                "menu_view": "Просмотр",
+                "menu_help": "Справка",
+                "load_image": "Загрузить Изображение...",
+                "load_labels": "Загрузить Метки...",
+                "save": "Сохранить",
+                "save_image": "Только Изображение...",
+                "save_label": "Только Метка...",
+                "save_overlay": "Наложенное Изображение...",
+                "save_screenshot": "Сохранить Скриншот...",
+                "reset": "Сброс",
+                "exit": "Выход",
+                "fit_all_views": "Подогнать Все Виды",
+                "toggle_control_panel": "Переключить Панель Управления",
+                "about": "О программе...",
+                "language": "Язык",
+                
+                # Status messages
+                "status_ready": "Готов - Загрузите изображение для начала",
+                "status_loading_image": "Загрузка изображения...",
+                "status_loading_labels": "Загрузка меток...",
+                "status_loading_image_path": "Загрузка изображения по пути...",
+                "status_loading_labels_path": "Загрузка меток по пути...",
+                "status_load_failed": "Ошибка загрузки",
+                "position": "Позиция:",
+                
+                # Control panel
+                "controls": "Управление",
+                "load_image_btn": "Загрузить Изображение (Ctrl+O)",
+                "load_labels_btn": "Загрузить Метки (Ctrl+L)",
+                "reset_btn": "Сброс (Ctrl+R)",
+                "image_path": "Путь к Изображению:",
+                "update_image": "Обновить Изображение",
+                "label_path": "Путь к Меткам:",
+                "update_labels": "Обновить Метки",
+                "overlay_settings": "Настройки Наложения",
+                "show_overlay": "Показать Наложение",
+                "alpha": "Альфа:",
+                "label_colors": "Цвета Меток",
+                "no_labels_found": "Метки не найдены",
+                "no_labels_loaded": "Метки не загружены",
+                "label_prefix": "Метка",
+                
+                # View titles
+                "axial_view": "Аксиальный (XY)",
+                "sagittal_view": "Сагиттальный (YZ)",
+                "coronal_view": "Коронарный (XZ)",
+                
+                # About dialog
+                "close": "Закрыть",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "Операции с Файлами",
+                "view_controls": "Управление Просмотром",
+                "overlay_controls": "Управление Наложением",
+                "measurement_tools": "Инструменты Измерения",
+                "measurement_settings": "Настройки Измерения",
+                
+                # Control panel elements
+                "no_image_loaded": "Изображение не загружено...",
+                "no_labels_loaded_placeholder": "Метки не загружены...",
+                "slice": "Срез:",
+                "rotate_90": "Поворот на 90°",
+                "reset_to_defaults": "Сброс к Умолчанию",
+                "alpha_label": "Альфа: 0.50",
+                
+                # View names
+                "axial": "Аксиальный",
+                "sagittal": "Сагиттальный",
+                "coronal": "Коронарный",
+                
+                # Measurement tools
+                "line_tool": "Инструмент Линия",
+                "eraser": "Ластик",
+                "export_csv": "Экспорт CSV",
+                "measurements": "Измерения:",
+                "select_all": "Выбрать Все",
+                "deselect_all": "Снять Выбор",
+                "line_width": "Толщина Линии:",
+                "line_color": "Цвет Линии:",
+                "text_color": "Цвет Текста:",
+                "font_size": "Размер Шрифта:",
+                "font_weight": "Жирность Шрифта:",
+                "auto_snap": "Автоприлипание:",
+                "enable_endpoint_snapping": "Включить прилипание концов",
+                "snap_distance": "Расстояние Прилипания:",
+                "apply_to_selected": "Применить к Выбранным",
+                "apply_to_all": "Применить ко Всем",
+                "normal": "Обычный",
+                "bold": "Жирный",
             }
         }
     
@@ -3082,6 +3970,62 @@ class MainWindow(QMainWindow):
         french_action.triggered.connect(lambda: self.change_language("fr"))
         self.language_action_group.addAction(french_action)
         language_menu.addAction(french_action)
+        
+        german_action = QAction(tr("german"), self)
+        german_action.setCheckable(True)
+        german_action.setChecked(get_current_language() == "de")
+        german_action.triggered.connect(lambda: self.change_language("de"))
+        self.language_action_group.addAction(german_action)
+        language_menu.addAction(german_action)
+        
+        japanese_action = QAction(tr("japanese"), self)
+        japanese_action.setCheckable(True)
+        japanese_action.setChecked(get_current_language() == "ja")
+        japanese_action.triggered.connect(lambda: self.change_language("ja"))
+        self.language_action_group.addAction(japanese_action)
+        language_menu.addAction(japanese_action)
+        
+        korean_action = QAction(tr("korean"), self)
+        korean_action.setCheckable(True)
+        korean_action.setChecked(get_current_language() == "ko")
+        korean_action.triggered.connect(lambda: self.change_language("ko"))
+        self.language_action_group.addAction(korean_action)
+        language_menu.addAction(korean_action)
+        
+        spanish_action = QAction(tr("spanish"), self)
+        spanish_action.setCheckable(True)
+        spanish_action.setChecked(get_current_language() == "es")
+        spanish_action.triggered.connect(lambda: self.change_language("es"))
+        self.language_action_group.addAction(spanish_action)
+        language_menu.addAction(spanish_action)
+        
+        traditional_chinese_action = QAction(tr("traditional_chinese"), self)
+        traditional_chinese_action.setCheckable(True)
+        traditional_chinese_action.setChecked(get_current_language() == "zh-TW")
+        traditional_chinese_action.triggered.connect(lambda: self.change_language("zh-TW"))
+        self.language_action_group.addAction(traditional_chinese_action)
+        language_menu.addAction(traditional_chinese_action)
+        
+        italian_action = QAction(tr("italian"), self)
+        italian_action.setCheckable(True)
+        italian_action.setChecked(get_current_language() == "it")
+        italian_action.triggered.connect(lambda: self.change_language("it"))
+        self.language_action_group.addAction(italian_action)
+        language_menu.addAction(italian_action)
+        
+        portuguese_action = QAction(tr("portuguese"), self)
+        portuguese_action.setCheckable(True)
+        portuguese_action.setChecked(get_current_language() == "pt")
+        portuguese_action.triggered.connect(lambda: self.change_language("pt"))
+        self.language_action_group.addAction(portuguese_action)
+        language_menu.addAction(portuguese_action)
+        
+        russian_action = QAction(tr("russian"), self)
+        russian_action.setCheckable(True)
+        russian_action.setChecked(get_current_language() == "ru")
+        russian_action.triggered.connect(lambda: self.change_language("ru"))
+        self.language_action_group.addAction(russian_action)
+        language_menu.addAction(russian_action)
 
         # Help menu
         help_menu = menubar.addMenu(tr("menu_help"))
@@ -3117,6 +4061,22 @@ class MainWindow(QMainWindow):
             elif language_code == "zh" and tr("chinese") in action.text():
                 action.setChecked(True)
             elif language_code == "fr" and tr("french") in action.text():
+                action.setChecked(True)
+            elif language_code == "de" and tr("german") in action.text():
+                action.setChecked(True)
+            elif language_code == "ja" and tr("japanese") in action.text():
+                action.setChecked(True)
+            elif language_code == "ko" and tr("korean") in action.text():
+                action.setChecked(True)
+            elif language_code == "es" and tr("spanish") in action.text():
+                action.setChecked(True)
+            elif language_code == "zh-TW" and tr("traditional_chinese") in action.text():
+                action.setChecked(True)
+            elif language_code == "it" and tr("italian") in action.text():
+                action.setChecked(True)
+            elif language_code == "pt" and tr("portuguese") in action.text():
+                action.setChecked(True)
+            elif language_code == "ru" and tr("russian") in action.text():
                 action.setChecked(True)
             else:
                 action.setChecked(False)

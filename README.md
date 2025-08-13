@@ -17,7 +17,7 @@ A versatile and user-friendly medical image viewer for NIfTI (.nii, .nii.gz) and
 -   **Adjustable Overlay Transparency**: Fine-tune the alpha value of the label overlay for optimal clarity.
 -   **Volume Saving**: Export the image, label, or blended overlay in NIfTI or MetaImage formats. Use `Ctrl+Shift+S` to open the save menu quickly.
 -   **Screenshot**: Save the current view as a PNG image.
--   **Bilingual Interface**: Supports both English and Chinese in the "About" dialog.
+-   **Trilingual Interface**: Supports English, Chinese, and French languages with dynamic switching capability.
 -   **Command-line Interface**: Load images and labels directly from the command line for faster workflow.
 
 ## Installation

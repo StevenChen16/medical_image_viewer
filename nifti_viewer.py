@@ -38,7 +38,7 @@ except ImportError:
 from PySide6.QtCore import (QLine, QLineF, QObject, QPoint, QPointF, QRect,
                             QRectF, QRunnable, QSize, Qt, QThread, QThreadPool,
                             QTimer, Signal)
-from PySide6.QtGui import (QAction, QBrush, QColor, QCursor, QFont,
+from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QCursor, QFont,
                            QFontMetricsF, QIcon, QImage, QMouseEvent, QPainter,
                            QPainterPath, QPen, QPixmap, QPixmapCache,
                            QShortcut, QTransform, QWheelEvent)
@@ -55,6 +55,236 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog,
                                QScrollArea, QSizePolicy, QSlider, QSpinBox,
                                QSplitter, QStatusBar, QTabWidget, QTextEdit,
                                QToolTip, QVBoxLayout, QWidget)
+
+# ============================================================================
+# INTERNATIONALIZATION SYSTEM
+# ============================================================================
+
+
+class TranslationManager:
+    """Centralized translation management for multilingual support."""
+    
+    def __init__(self):
+        self.current_language = "en"  # Default to English
+        self.translations = {
+            "en": {
+                # Window titles
+                "window_title": "Medical Image Viewer",
+                "about_title": "About Medical Image Viewer",
+                
+                # Menu items
+                "menu_file": "File",
+                "menu_view": "View",
+                "menu_help": "Help",
+                "load_image": "Load Image...",
+                "load_labels": "Load Labels...",
+                "save": "Save",
+                "save_image": "Image Only...",
+                "save_label": "Label Only...",
+                "save_overlay": "Overlay Image...",
+                "save_screenshot": "Save Screenshot...",
+                "reset": "Reset",
+                "exit": "Exit",
+                "fit_all_views": "Fit All Views",
+                "toggle_control_panel": "Toggle Control Panel",
+                "about": "About...",
+                "language": "Language",
+                
+                # Status messages
+                "status_ready": "Ready - Load an image to begin",
+                "status_loading_image": "Loading image...",
+                "status_loading_labels": "Loading labels...",
+                "status_loading_image_path": "Loading image from path...",
+                "status_loading_labels_path": "Loading labels from path...",
+                "status_load_failed": "Load failed",
+                "position": "Position:",
+                
+                # Control panel
+                "controls": "Controls",
+                "load_image_btn": "Load Image (Ctrl+O)",
+                "load_labels_btn": "Load Labels (Ctrl+L)",
+                "reset_btn": "Reset (Ctrl+R)",
+                "image_path": "Image Path:",
+                "update_image": "Update Image",
+                "label_path": "Label Path:",
+                "update_labels": "Update Labels",
+                "overlay_settings": "Overlay Settings",
+                "show_overlay": "Show Overlay",
+                "alpha": "Alpha:",
+                "label_colors": "Label Colors",
+                "no_labels_found": "No labels found",
+                "no_labels_loaded": "No labels loaded",
+                "label_prefix": "Label",
+                
+                # View titles
+                "axial_view": "Axial (XY)",
+                "sagittal_view": "Sagittal (YZ)",
+                "coronal_view": "Coronal (XZ)",
+                
+                # About dialog
+                "close": "Close",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+            },
+            "zh": {
+                # Window titles
+                "window_title": "医学影像查看器",
+                "about_title": "关于医学影像查看器",
+                
+                # Menu items
+                "menu_file": "文件",
+                "menu_view": "视图",
+                "menu_help": "帮助",
+                "load_image": "加载影像...",
+                "load_labels": "加载标签...",
+                "save": "保存",
+                "save_image": "仅影像...",
+                "save_label": "仅标签...",
+                "save_overlay": "叠加影像...",
+                "save_screenshot": "保存截图...",
+                "reset": "重置",
+                "exit": "退出",
+                "fit_all_views": "适应所有视图",
+                "toggle_control_panel": "切换控制面板",
+                "about": "关于...",
+                "language": "语言",
+                
+                # Status messages
+                "status_ready": "就绪 - 加载影像开始使用",
+                "status_loading_image": "正在加载影像...",
+                "status_loading_labels": "正在加载标签...",
+                "status_loading_image_path": "正在从路径加载影像...",
+                "status_loading_labels_path": "正在从路径加载标签...",
+                "status_load_failed": "加载失败",
+                "position": "位置:",
+                
+                # Control panel
+                "controls": "控制",
+                "load_image_btn": "加载影像 (Ctrl+O)",
+                "load_labels_btn": "加载标签 (Ctrl+L)",
+                "reset_btn": "重置 (Ctrl+R)",
+                "image_path": "影像路径:",
+                "update_image": "更新影像",
+                "label_path": "标签路径:",
+                "update_labels": "更新标签",
+                "overlay_settings": "叠加设置",
+                "show_overlay": "显示叠加",
+                "alpha": "透明度:",
+                "label_colors": "标签颜色",
+                "no_labels_found": "未找到标签",
+                "no_labels_loaded": "未加载标签",
+                "label_prefix": "标签",
+                
+                # View titles
+                "axial_view": "轴向 (XY)",
+                "sagittal_view": "矢状 (YZ)",
+                "coronal_view": "冠状 (XZ)",
+                
+                # About dialog
+                "close": "关闭",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+            },
+            "fr": {
+                # Window titles
+                "window_title": "Visionneuse d'Images Médicales",
+                "about_title": "À propos de la Visionneuse d'Images Médicales",
+                
+                # Menu items
+                "menu_file": "Fichier",
+                "menu_view": "Affichage",
+                "menu_help": "Aide",
+                "load_image": "Charger une Image...",
+                "load_labels": "Charger des Étiquettes...",
+                "save": "Enregistrer",
+                "save_image": "Image Seule...",
+                "save_label": "Étiquette Seule...",
+                "save_overlay": "Image Superposée...",
+                "save_screenshot": "Enregistrer la Capture d'Écran...",
+                "reset": "Réinitialiser",
+                "exit": "Quitter",
+                "fit_all_views": "Ajuster Toutes les Vues",
+                "toggle_control_panel": "Basculer le Panneau de Contrôle",
+                "about": "À propos...",
+                "language": "Langue",
+                
+                # Status messages
+                "status_ready": "Prêt - Chargez une image pour commencer",
+                "status_loading_image": "Chargement de l'image...",
+                "status_loading_labels": "Chargement des étiquettes...",
+                "status_loading_image_path": "Chargement de l'image depuis le chemin...",
+                "status_loading_labels_path": "Chargement des étiquettes depuis le chemin...",
+                "status_load_failed": "Échec du chargement",
+                "position": "Position:",
+                
+                # Control panel
+                "controls": "Contrôles",
+                "load_image_btn": "Charger une Image (Ctrl+O)",
+                "load_labels_btn": "Charger des Étiquettes (Ctrl+L)",
+                "reset_btn": "Réinitialiser (Ctrl+R)",
+                "image_path": "Chemin de l'Image:",
+                "update_image": "Mettre à jour l'Image",
+                "label_path": "Chemin des Étiquettes:",
+                "update_labels": "Mettre à jour les Étiquettes",
+                "overlay_settings": "Paramètres de Superposition",
+                "show_overlay": "Afficher la Superposition",
+                "alpha": "Alpha:",
+                "label_colors": "Couleurs des Étiquettes",
+                "no_labels_found": "Aucune étiquette trouvée",
+                "no_labels_loaded": "Aucune étiquette chargée",
+                "label_prefix": "Étiquette",
+                
+                # View titles
+                "axial_view": "Axial (XY)",
+                "sagittal_view": "Sagittal (YZ)",
+                "coronal_view": "Coronal (XZ)",
+                
+                # About dialog
+                "close": "Fermer",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+            }
+        }
+    
+    def set_language(self, language_code: str) -> None:
+        """Set the current language."""
+        if language_code in self.translations:
+            self.current_language = language_code
+    
+    def get_language(self) -> str:
+        """Get the current language code."""
+        return self.current_language
+    
+    def get_text(self, key: str) -> str:
+        """Get translated text for the given key."""
+        return self.translations.get(self.current_language, {}).get(key, key)
+    
+    def get_available_languages(self) -> list:
+        """Get list of available language codes."""
+        return list(self.translations.keys())
+
+
+# Global translation manager instance
+_translation_manager = TranslationManager()
+
+
+def tr(key: str) -> str:
+    """Translate text using the global translation manager."""
+    return _translation_manager.get_text(key)
+
+
+def set_language(language_code: str) -> None:
+    """Set the global application language."""
+    _translation_manager.set_language(language_code)
+
+
+def get_current_language() -> str:
+    """Get the current application language."""
+    return _translation_manager.get_language()
+
 
 # ============================================================================
 # UTILITY WIDGETS
@@ -1266,12 +1496,12 @@ class PreloadWorker(QRunnable):
 
 class AboutDialog(QDialog):
     """
-    About dialog with bilingual (English/Chinese) support and software information.
+    About dialog with trilingual (English/Chinese/French) support and software information.
     """
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("About Medical Image Viewer")
+        self.setWindowTitle(tr("about_title"))
         self.setFixedSize(600, 500)
         self.setModal(True)
 
@@ -1285,9 +1515,10 @@ class AboutDialog(QDialog):
         # Create tabs
         self.create_english_tab()
         self.create_chinese_tab()
+        self.create_french_tab()
 
         # Close button
-        close_btn = QPushButton("Close / 关闭")
+        close_btn = QPushButton(tr("close"))
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
 
@@ -1399,7 +1630,7 @@ class AboutDialog(QDialog):
         layout.addWidget(description)
 
         scroll_area.setWidget(content_widget)
-        self.tab_widget.addTab(scroll_area, "English")
+        self.tab_widget.addTab(scroll_area, tr("english"))
 
     def create_chinese_tab(self) -> None:
         """Create Chinese content tab."""
@@ -1471,7 +1702,79 @@ class AboutDialog(QDialog):
         layout.addWidget(description)
 
         scroll_area.setWidget(content_widget)
-        self.tab_widget.addTab(scroll_area, "中文")
+        self.tab_widget.addTab(scroll_area, tr("chinese"))
+
+    def create_french_tab(self) -> None:
+        """Create French content tab."""
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
+
+        # Main title
+        title_label = QLabel("Visionneuse d'Images Médicales")
+        title_label.setStyleSheet(
+            "font-size: 18px; font-weight: bold; color: #4a90e2; margin-bottom: 10px;"
+        )
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+
+        # Version info
+        version_label = QLabel("Version 0.1.4")
+        version_label.setStyleSheet(
+            "font-size: 14px; color: #ccc; margin-bottom: 15px;"
+        )
+        version_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(version_label)
+
+        # Description
+        description = QTextEdit()
+        description.setReadOnly(True)
+        description.setMaximumHeight(300)
+        description.setHtml(
+            """
+        <h3 style="color: #4a90e2;">Qu'est-ce que cette Visionneuse ?</h3>
+        <p>Une visionneuse simple et rapide pour les images médicales. Visualisez les examens IRM, 
+        les superpositions et les masques de segmentation dans trois perspectives simultanément.</p>
+        
+        <h3 style="color: #4a90e2;">Comment l'Utiliser</h3>
+        <ul>
+            <li><b>Charger des Fichiers :</b> Utilisez le menu Fichier → Charger Image/Étiquettes, ou tapez les chemins dans le panneau de droite</li>
+            <li><b>Naviguer :</b> La molette de la souris fait défiler les coupes, Ctrl+molette zoome</li>
+            <li><b>Panoramique et Rotation :</b> Clic droit et glisser pour déplacer la vue, cliquez sur les boutons de rotation pour retourner</li>
+            <li><b>Superpositions :</b> Cochez "Afficher la Superposition" et ajustez le curseur de transparence</li>
+            <li><b>Enregistrer :</b> Fichier → Enregistrer Capture d'Écran (Ctrl+S) ou Volume (Ctrl+Shift+S)</li>
+        </ul>
+        
+        <h3 style="color: #4a90e2;">Raccourcis Clavier</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr><td style="padding: 4px;"><b>Ctrl+O</b></td><td style="padding: 4px;">Ouvrir un fichier image</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+L</b></td><td style="padding: 4px;">Ouvrir un fichier d'étiquettes</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+S</b></td><td style="padding: 4px;">Enregistrer capture d'écran</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+Shift+S</b></td><td style="padding: 4px;">Ouvrir le menu d'enregistrement de volume</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+R</b></td><td style="padding: 4px;">Réinitialiser les vues et vider le cache</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+T</b></td><td style="padding: 4px;">Basculer le panneau de contrôle</td></tr>
+            <tr><td style="padding: 4px;"><b>F</b></td><td style="padding: 4px;">Ajuster toutes les vues à la fenêtre</td></tr>
+            <tr><td style="padding: 4px;"><b>F1</b></td><td style="padding: 4px;">Afficher cette boîte de dialogue</td></tr>
+            <tr><td style="padding: 4px;"><b>Molette</b></td><td style="padding: 4px;">Faire défiler les coupes</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+Molette</b></td><td style="padding: 4px;">Zoomer/Dézoomer</td></tr>
+            <tr><td style="padding: 4px;"><b>Clic droit-glisser</b></td><td style="padding: 4px;">Panoramique de la vue</td></tr>
+        </table>
+        
+        <h3 style="color: #4a90e2;">Options de Ligne de Commande</h3>
+        <p>Exécutez <code>python nifti_viewer.py --help</code> pour les options complètes.<br>
+        Exemples : <code>-i image.mha -l labels.nii.gz</code></p>
+        
+        <h3 style="color: #4a90e2;">Support de Fichiers</h3>
+        <p>Supporte les formats NIfTI (.nii, .nii.gz) et MetaImage (.mha, .mhd).</p>
+        """
+        )
+        layout.addWidget(description)
+
+        scroll_area.setWidget(content_widget)
+        self.tab_widget.addTab(scroll_area, tr("french"))
 
 
 class SliceView(QGraphicsView):
@@ -2014,7 +2317,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.controller = controller
 
-        self.setWindowTitle("Medical Image Viewer")
+        self.setWindowTitle(tr("window_title"))
         self.setWindowIcon(QIcon("media/logo.png"))
         self.setMinimumSize(1200, 800)
         self.resize(1400, 900)  # Set a good default size
@@ -2024,6 +2327,75 @@ class MainWindow(QMainWindow):
         self.setup_toolbar()
         self.setup_menu()
         self.setup_statusbar()
+    
+    def update_ui_text(self):
+        """Update all UI text with current language translations."""
+        self.setWindowTitle(tr("window_title"))
+        
+        # Update menu text
+        if hasattr(self, 'menuBar'):
+            for action in self.menuBar().actions():
+                menu = action.menu()
+                if menu:
+                    if menu.title() in ["File", "文件", "Fichier"]:
+                        menu.setTitle(tr("menu_file"))
+                    elif menu.title() in ["View", "视图", "Affichage"]:
+                        menu.setTitle(tr("menu_view"))
+                    elif menu.title() in ["Help", "帮助", "Aide"]:
+                        menu.setTitle(tr("menu_help"))
+                    elif menu.title() in ["Language", "语言", "Langue"]:
+                        menu.setTitle(tr("language"))
+        
+        # Update actions
+        if hasattr(self, 'actions'):
+            self.actions["load_image"].setText(tr("load_image"))
+            self.actions["load_labels"].setText(tr("load_labels"))
+            self.actions["save_image"].setText(tr("save_image"))
+            self.actions["save_label"].setText(tr("save_label"))
+            self.actions["save_overlay"].setText(tr("save_overlay"))
+            self.actions["save_screenshot"].setText(tr("save_screenshot"))
+            self.actions["reset"].setText(tr("reset"))
+            self.actions["exit"].setText(tr("exit"))
+            self.actions["fit_all"].setText(tr("fit_all_views"))
+            self.actions["toggle_control_panel"].setText(tr("toggle_control_panel"))
+            self.actions["about"].setText(tr("about"))
+        
+        # Update control dock
+        if hasattr(self, 'control_dock'):
+            self.control_dock.setWindowTitle(tr("controls"))
+        
+        # Update control buttons
+        if hasattr(self, 'load_image_btn'):
+            self.load_image_btn.setText(tr("load_image_btn"))
+        if hasattr(self, 'load_labels_btn'):
+            self.load_labels_btn.setText(tr("load_labels_btn"))
+        if hasattr(self, 'reset_btn'):
+            self.reset_btn.setText(tr("reset_btn"))
+        if hasattr(self, 'update_image_btn'):
+            self.update_image_btn.setText(tr("update_image"))
+        if hasattr(self, 'update_labels_btn'):
+            self.update_labels_btn.setText(tr("update_labels"))
+        
+        # Update status bar
+        if hasattr(self, 'status_label'):
+            current_text = self.status_label.text()
+            if "Ready" in current_text or "就绪" in current_text or "Prêt" in current_text:
+                self.status_label.setText(tr("status_ready"))
+        
+        # Update view titles
+        view_titles = [tr("axial_view"), tr("sagittal_view"), tr("coronal_view")]
+        view_names = ["axial", "sagittal", "coronal"]
+        
+        if hasattr(self, 'slice_views'):
+            for i, name in enumerate(view_names):
+                # Find the title label for this view
+                view_widget = self.slice_views[name].parent()
+                if view_widget:
+                    layout = view_widget.layout()
+                    if layout and layout.count() > 0:
+                        title_widget = layout.itemAt(0).widget()
+                        if isinstance(title_widget, QLabel):
+                            title_widget.setText(view_titles[i])
 
     def setup_ui(self) -> None:
         """Create main UI layout."""
@@ -2040,7 +2412,7 @@ class MainWindow(QMainWindow):
         # Create three slice views
         self.slice_views = {}
         view_names = ["axial", "sagittal", "coronal"]
-        view_titles = ["Axial (XY)", "Sagittal (YZ)", "Coronal (XZ)"]
+        view_titles = [tr("axial_view"), tr("sagittal_view"), tr("coronal_view")]
 
         for name, title in zip(view_names, view_titles):
             # View container
@@ -2069,7 +2441,7 @@ class MainWindow(QMainWindow):
 
     def setup_control_dock(self) -> None:
         """Create docked control panel with collapsible sections."""
-        self.control_dock = QDockWidget("Controls", self)
+        self.control_dock = QDockWidget(tr("controls"), self)
         self.control_dock.setAllowedAreas(
             Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea
         )
@@ -2100,23 +2472,23 @@ class MainWindow(QMainWindow):
 
         # File controls
         file_layout = QVBoxLayout()
-        self.load_image_btn = QPushButton("Load Image (Ctrl+O)")
-        self.load_labels_btn = QPushButton("Load Labels (Ctrl+L)")
-        self.reset_btn = QPushButton("Reset (Ctrl+R)")
+        self.load_image_btn = QPushButton(tr("load_image_btn"))
+        self.load_labels_btn = QPushButton(tr("load_labels_btn"))
+        self.reset_btn = QPushButton(tr("reset_btn"))
         file_layout.addWidget(self.load_image_btn)
         file_layout.addWidget(self.load_labels_btn)
         file_layout.addWidget(self.reset_btn)
-        file_layout.addWidget(QLabel("Image Path:"))
+        file_layout.addWidget(QLabel(tr("image_path")))
         self.image_path_input = QLineEdit()
         self.image_path_input.setPlaceholderText("No image loaded...")
         file_layout.addWidget(self.image_path_input)
-        self.update_image_btn = QPushButton("Update Image")
+        self.update_image_btn = QPushButton(tr("update_image"))
         file_layout.addWidget(self.update_image_btn)
-        file_layout.addWidget(QLabel("Label Path:"))
+        file_layout.addWidget(QLabel(tr("label_path")))
         self.label_path_input = QLineEdit()
         self.label_path_input.setPlaceholderText("No labels loaded...")
         file_layout.addWidget(self.label_path_input)
-        self.update_labels_btn = QPushButton("Update Labels")
+        self.update_labels_btn = QPushButton(tr("update_labels"))
         file_layout.addWidget(self.update_labels_btn)
         file_group = create_collapsible_group("File Operations", file_layout)
         dock_layout.addWidget(file_group)
@@ -2197,7 +2569,7 @@ class MainWindow(QMainWindow):
         self.label_colors_scroll.setWidget(self.label_colors_widget)
 
         # Add initial empty label inside the scroll area
-        empty_label = QLabel("No labels loaded")
+        empty_label = QLabel(tr("no_labels_loaded"))
         empty_label.setAlignment(Qt.AlignCenter)
         empty_label.setStyleSheet("color: #666; font-style: italic;")
         self.label_colors_content_layout.addWidget(empty_label)
@@ -2391,20 +2763,20 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
 
         # File menu
-        file_menu = menubar.addMenu("File")
+        file_menu = menubar.addMenu(tr("menu_file"))
 
-        load_image_action = QAction("Load Image...", self)
+        load_image_action = QAction(tr("load_image"), self)
         load_image_action.setShortcut("Ctrl+O")
         file_menu.addAction(load_image_action)
 
-        load_labels_action = QAction("Load Labels...", self)
+        load_labels_action = QAction(tr("load_labels"), self)
         load_labels_action.setShortcut("Ctrl+L")
         file_menu.addAction(load_labels_action)
 
-        save_submenu = file_menu.addMenu("Save")
-        save_image_action = QAction("Image Only...", self)
-        save_label_action = QAction("Label Only...", self)
-        save_overlay_action = QAction("Overlay Image...", self)
+        save_submenu = file_menu.addMenu(tr("save"))
+        save_image_action = QAction(tr("save_image"), self)
+        save_label_action = QAction(tr("save_label"), self)
+        save_overlay_action = QAction(tr("save_overlay"), self)
         save_submenu.addAction(save_image_action)
         save_submenu.addAction(save_label_action)
         save_submenu.addAction(save_overlay_action)
@@ -2416,41 +2788,68 @@ class MainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
-        save_screenshot_action = QAction("Save Screenshot...", self)
+        save_screenshot_action = QAction(tr("save_screenshot"), self)
         save_screenshot_action.setShortcut("Ctrl+S")
         file_menu.addAction(save_screenshot_action)
 
         file_menu.addSeparator()
 
-        reset_action = QAction("Reset", self)
+        reset_action = QAction(tr("reset"), self)
         reset_action.setShortcut("Ctrl+R")
         file_menu.addAction(reset_action)
 
         file_menu.addSeparator()
 
-        exit_action = QAction("Exit", self)
+        exit_action = QAction(tr("exit"), self)
         exit_action.setShortcut("Ctrl+Q")
         file_menu.addAction(exit_action)
 
         # View menu
-        view_menu = menubar.addMenu("View")
+        view_menu = menubar.addMenu(tr("menu_view"))
 
-        fit_all_action = QAction("Fit All Views", self)
+        fit_all_action = QAction(tr("fit_all_views"), self)
         fit_all_action.setShortcut("F")
         view_menu.addAction(fit_all_action)
 
         view_menu.addSeparator()
 
-        toggle_control_panel_action = QAction("Toggle Control Panel", self)
+        toggle_control_panel_action = QAction(tr("toggle_control_panel"), self)
         toggle_control_panel_action.setShortcut("Ctrl+T")
         toggle_control_panel_action.setCheckable(True)
         toggle_control_panel_action.setChecked(True)
         view_menu.addAction(toggle_control_panel_action)
 
-        # Help menu
-        help_menu = menubar.addMenu("Help")
+        # Language menu
+        language_menu = menubar.addMenu(tr("language"))
+        
+        # Create language action group for exclusive selection
+        self.language_action_group = QActionGroup(self)
+        
+        english_action = QAction(tr("english"), self)
+        english_action.setCheckable(True)
+        english_action.setChecked(get_current_language() == "en")
+        english_action.triggered.connect(lambda: self.change_language("en"))
+        self.language_action_group.addAction(english_action)
+        language_menu.addAction(english_action)
+        
+        chinese_action = QAction(tr("chinese"), self)
+        chinese_action.setCheckable(True)
+        chinese_action.setChecked(get_current_language() == "zh")
+        chinese_action.triggered.connect(lambda: self.change_language("zh"))
+        self.language_action_group.addAction(chinese_action)
+        language_menu.addAction(chinese_action)
+        
+        french_action = QAction(tr("french"), self)
+        french_action.setCheckable(True)
+        french_action.setChecked(get_current_language() == "fr")
+        french_action.triggered.connect(lambda: self.change_language("fr"))
+        self.language_action_group.addAction(french_action)
+        language_menu.addAction(french_action)
 
-        about_action = QAction("About...", self)
+        # Help menu
+        help_menu = menubar.addMenu(tr("menu_help"))
+
+        about_action = QAction(tr("about"), self)
         about_action.setShortcut("F1")
         help_menu.addAction(about_action)
 
@@ -2469,14 +2868,30 @@ class MainWindow(QMainWindow):
             "about": about_action,
         }
 
+    def change_language(self, language_code: str):
+        """Change the application language and update UI."""
+        set_language(language_code)
+        self.update_ui_text()
+        
+        # Update language menu checkmarks
+        for action in self.language_action_group.actions():
+            if language_code == "en" and tr("english") in action.text():
+                action.setChecked(True)
+            elif language_code == "zh" and tr("chinese") in action.text():
+                action.setChecked(True)
+            elif language_code == "fr" and tr("french") in action.text():
+                action.setChecked(True)
+            else:
+                action.setChecked(False)
+
     def setup_statusbar(self) -> None:
         """Create status bar."""
         self.status_bar = self.statusBar()
-        self.status_label = QLabel("Ready - Load an image to begin")
+        self.status_label = QLabel(tr("status_ready"))
         self.status_bar.addWidget(self.status_label)
 
         # Coordinate display
-        self.coord_label = QLabel("Position: -")
+        self.coord_label = QLabel(f"{tr('position')} -")
         self.status_bar.addPermanentWidget(self.coord_label)
 
     def keyPressEvent(self, event):
@@ -4276,7 +4691,7 @@ class ViewerController(QObject):
         )
 
         if filepath:
-            self.view.status_label.setText("Loading image...")
+            self.view.status_label.setText(tr("status_loading_image"))
 
             # Show progress bar if control panel exists
             if (
@@ -4300,7 +4715,7 @@ class ViewerController(QObject):
         )
 
         if filepath:
-            self.view.status_label.setText("Loading labels...")
+            self.view.status_label.setText(tr("status_loading_labels"))
 
             # Show progress bar if control panel exists
             if (
@@ -4333,7 +4748,7 @@ class ViewerController(QObject):
                                 f"File not found: {filepath}")
             return
 
-        self.view.status_label.setText("Loading image from path...")
+        self.view.status_label.setText(tr("status_loading_image_path"))
         self.view.progress_bar.setValue(0)
         self.view.progress_bar.setVisible(True)
 
@@ -4360,7 +4775,7 @@ class ViewerController(QObject):
                                 f"File not found: {filepath}")
             return
 
-        self.view.status_label.setText("Loading labels from path...")
+        self.view.status_label.setText(tr("status_loading_labels_path"))
         self.view.progress_bar.setValue(0)
         self.view.progress_bar.setVisible(True)
 
@@ -4395,7 +4810,7 @@ class ViewerController(QObject):
             slice_view.pixmap_item = QGraphicsPixmapItem()
             slice_view.scene.addItem(slice_view.pixmap_item)
 
-        self.view.status_label.setText("Ready - Load an image to begin")
+        self.view.status_label.setText(tr("status_ready"))
 
         # Reset progress bar if control panel exists
         if hasattr(self.view, "control_dock") and self.view.control_dock is not None:
@@ -4640,7 +5055,7 @@ class ViewerController(QObject):
 
     def _on_load_error(self, error_msg: str) -> None:
         """Handle loading errors."""
-        self.view.status_label.setText("Load failed")
+        self.view.status_label.setText(tr("status_load_failed"))
 
         # Hide progress bar if control panel exists
         if hasattr(self.view, "control_dock") and self.view.control_dock is not None:
@@ -4711,7 +5126,7 @@ class ViewerController(QObject):
     def _on_mouse_position(self, view_name: str, x: int, y: int) -> None:
         """Handle mouse position for tooltips and coordinates."""
         # Update coordinate display
-        self.view.coord_label.setText(f"Position: ({x}, {y})")
+        self.view.coord_label.setText(f"{tr('position')} ({x}, {y})")
 
         # Show label tooltip if available
         if self.model.label_data is not None:
@@ -4772,7 +5187,7 @@ class ViewerController(QObject):
 
         if not label_values:
             # No labels - show empty message
-            empty_label = QLabel("No labels found")
+            empty_label = QLabel(tr("no_labels_found"))
             empty_label.setAlignment(Qt.AlignCenter)
             empty_label.setStyleSheet("color: #666; font-style: italic;")
             self.view.label_colors_content_layout.addWidget(empty_label)
@@ -4785,7 +5200,7 @@ class ViewerController(QObject):
             label_layout = QHBoxLayout()
 
             # Label value text
-            label_text = QLabel(f"Label {label_val}:")
+            label_text = QLabel(f"{tr('label_prefix')} {label_val}:")
             label_text.setMinimumWidth(80)
             label_layout.addWidget(label_text)
 
@@ -4857,7 +5272,7 @@ class ViewerController(QObject):
         self.view.label_color_buttons.clear()
 
         # Show empty message
-        empty_label = QLabel("No labels loaded")
+        empty_label = QLabel(tr("no_labels_loaded"))
         empty_label.setAlignment(Qt.AlignCenter)
         empty_label.setStyleSheet("color: #666; font-style: italic;")
         self.view.label_colors_content_layout.addWidget(empty_label)

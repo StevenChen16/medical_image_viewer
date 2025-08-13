@@ -7,7 +7,7 @@ A medical image viewer for NIfTI and MHA format files.
 import time
 import dataclasses
 import csv
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 __author__ = "Steven Chen"
 __license__ = "MIT"
 __copyright__ = "Copyright 2025, Steven Chen"
@@ -284,7 +284,7 @@ class TranslationManager:
                 "auto_snap": "自动吸附:",
                 "enable_endpoint_snapping": "启用端点吸附",
                 "snap_distance": "吸附距离:",
-                "apply_to_selected": "应用到选中",
+                "apply_to_selected": "应用到选中线条",
                 "apply_to_all": "应用到全部",
                 "normal": "正常",
                 "bold": "粗体",

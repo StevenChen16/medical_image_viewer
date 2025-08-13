@@ -7,7 +7,7 @@ A medical image viewer for NIfTI and MHA format files.
 import time
 import dataclasses
 import csv
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 __author__ = "Steven Chen"
 __license__ = "MIT"
 __copyright__ = "Copyright 2025, Steven Chen"
@@ -38,7 +38,7 @@ except ImportError:
 from PySide6.QtCore import (QLine, QLineF, QObject, QPoint, QPointF, QRect,
                             QRectF, QRunnable, QSize, Qt, QThread, QThreadPool,
                             QTimer, Signal)
-from PySide6.QtGui import (QAction, QBrush, QColor, QCursor, QFont,
+from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QCursor, QFont,
                            QFontMetricsF, QIcon, QImage, QMouseEvent, QPainter,
                            QPainterPath, QPen, QPixmap, QPixmapCache,
                            QShortcut, QTransform, QWheelEvent)
@@ -55,6 +55,1651 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QColorDialog,
                                QScrollArea, QSizePolicy, QSlider, QSpinBox,
                                QSplitter, QStatusBar, QTabWidget, QTextEdit,
                                QToolTip, QVBoxLayout, QWidget)
+
+# ============================================================================
+# INTERNATIONALIZATION SYSTEM
+# ============================================================================
+
+
+class TranslationManager:
+    """Centralized translation management for multilingual support."""
+    
+    def __init__(self):
+        self.current_language = "en"  # Default to English
+        self.translations = {
+            "en": {
+                # Window titles
+                "window_title": "Medical Image Viewer",
+                "about_title": "About Medical Image Viewer",
+                
+                # Menu items
+                "menu_file": "File",
+                "menu_view": "View",
+                "menu_help": "Help",
+                "load_image": "Load Image...",
+                "load_labels": "Load Labels...",
+                "save": "Save",
+                "save_image": "Image Only...",
+                "save_label": "Label Only...",
+                "save_overlay": "Overlay Image...",
+                "save_screenshot": "Save Screenshot...",
+                "reset": "Reset",
+                "exit": "Exit",
+                "fit_all_views": "Fit All Views",
+                "toggle_control_panel": "Toggle Control Panel",
+                "about": "About...",
+                "language": "Language",
+                
+                # Status messages
+                "status_ready": "Ready - Load an image to begin",
+                "status_loading_image": "Loading image...",
+                "status_loading_labels": "Loading labels...",
+                "status_loading_image_path": "Loading image from path...",
+                "status_loading_labels_path": "Loading labels from path...",
+                "status_load_failed": "Load failed",
+                "position": "Position:",
+                
+                # Control panel
+                "controls": "Controls",
+                "load_image_btn": "Load Image (Ctrl+O)",
+                "load_labels_btn": "Load Labels (Ctrl+L)",
+                "reset_btn": "Reset (Ctrl+R)",
+                "image_path": "Image Path:",
+                "update_image": "Update Image",
+                "label_path": "Label Path:",
+                "update_labels": "Update Labels",
+                "overlay_settings": "Overlay Settings",
+                "show_overlay": "Show Overlay",
+                "alpha": "Alpha:",
+                "label_colors": "Label Colors",
+                "no_labels_found": "No labels found",
+                "no_labels_loaded": "No labels loaded",
+                "label_prefix": "Label",
+                
+                # View titles
+                "axial_view": "Axial (XY)",
+                "sagittal_view": "Sagittal (YZ)",
+                "coronal_view": "Coronal (XZ)",
+                
+                # About dialog
+                "close": "Close",
+                
+                # About dialog content
+                "other_languages": "Other Languages",
+                "select_language": "Select Language:",
+                "about_what_is": "What is this Viewer?",
+                "about_description": "A simple, fast viewer for medical images. View MRI scans, overlays, and segmentation masks in three perspectives simultaneously.",
+                "about_how_to_use": "How to Use",
+                "about_load_files": "<b>Load Files:</b> Use File menu → Load Image/Labels, or type paths in the right panel",
+                "about_navigate": "<b>Navigate:</b> Mouse wheel scrolls through slices, Ctrl+wheel zooms in/out",
+                "about_pan_rotate": "<b>Pan & Rotate:</b> Right-click drag to move view, click rotation buttons to flip",
+                "about_overlays": "<b>Overlays:</b> Check \"Show Overlay\" and adjust transparency slider",
+                "about_save": "<b>Save:</b> File → Save Screenshot (Ctrl+S) or Volume (Ctrl+Shift+S)",
+                "about_shortcuts": "Keyboard Shortcuts",
+                "about_open_image": "Open image file",
+                "about_open_labels": "Open label file",
+                "about_save_screenshot": "Save screenshot",
+                "about_save_volume": "Open volume save menu",
+                "about_reset": "Reset views and clear cache",
+                "about_toggle_panel": "Toggle control panel",
+                "about_fit_views": "Fit all views to window",
+                "about_show_dialog": "Show this dialog",
+                "about_scroll_slices": "Scroll through slices",
+                "about_zoom": "Zoom in/out",
+                "about_pan_view": "Pan view",
+                "about_command_line": "Command Line Options",
+                "about_command_help": "Run <code>python nifti_viewer.py --help</code> for full options.<br>Examples: <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "File Support",
+                "about_file_formats": "Supports NIfTI (.nii, .nii.gz) and MetaImage (.mha, .mhd) formats.",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "File Operations",
+                "view_controls": "View Controls",
+                "overlay_controls": "Overlay Controls",
+                "measurement_tools": "Measurement Tools",
+                "measurement_settings": "Measurement Settings",
+                
+                # Control panel elements
+                "no_image_loaded": "No image loaded...",
+                "no_labels_loaded_placeholder": "No labels loaded...",
+                "slice": "Slice:",
+                "rotate_90": "Rotate 90°",
+                "reset_to_defaults": "Reset to Defaults",
+                "alpha_label": "Alpha: 0.50",
+                
+                # View names
+                "axial": "Axial",
+                "sagittal": "Sagittal", 
+                "coronal": "Coronal",
+                
+                # Measurement tools
+                "line_tool": "Line Tool",
+                "eraser": "Eraser",
+                "export_csv": "Export CSV",
+                "measurements": "Measurements:",
+                "select_all": "Select All",
+                "deselect_all": "Deselect All",
+                "line_width": "Line Width:",
+                "line_color": "Line Color:",
+                "text_color": "Text Color:",
+                "font_size": "Font Size:",
+                "font_weight": "Font Weight:",
+                "auto_snap": "Auto-Snap:",
+                "enable_endpoint_snapping": "Enable endpoint snapping",
+                "snap_distance": "Snap Distance:",
+                "apply_to_selected": "Apply to Selected",
+                "apply_to_all": "Apply to All",
+                "normal": "Normal",
+                "bold": "Bold",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "Hide Control Panel (Ctrl+T)",
+                "copy_coordinates": "Copy Coordinates",
+                "copy_length": "Copy Length",
+                "apply_style_to_all": "Apply Style to All",
+                "select_label_color": "Select Label Color",
+                "delete": "Delete",
+                "alpha": "Alpha",
+            },
+            "zh": {
+                # Window titles
+                "window_title": "医学影像查看器",
+                "about_title": "关于医学影像查看器",
+                
+                # Menu items
+                "menu_file": "文件",
+                "menu_view": "视图",
+                "menu_help": "帮助",
+                "load_image": "加载影像...",
+                "load_labels": "加载标签...",
+                "save": "保存",
+                "save_image": "仅影像...",
+                "save_label": "仅标签...",
+                "save_overlay": "叠加影像...",
+                "save_screenshot": "保存截图...",
+                "reset": "重置",
+                "exit": "退出",
+                "fit_all_views": "适应所有视图",
+                "toggle_control_panel": "切换控制面板",
+                "about": "关于...",
+                "language": "语言",
+                
+                # Status messages
+                "status_ready": "就绪 - 加载影像开始使用",
+                "status_loading_image": "正在加载影像...",
+                "status_loading_labels": "正在加载标签...",
+                "status_loading_image_path": "正在从路径加载影像...",
+                "status_loading_labels_path": "正在从路径加载标签...",
+                "status_load_failed": "加载失败",
+                "position": "位置:",
+                
+                # Control panel
+                "controls": "控制",
+                "load_image_btn": "加载影像 (Ctrl+O)",
+                "load_labels_btn": "加载标签 (Ctrl+L)",
+                "reset_btn": "重置 (Ctrl+R)",
+                "image_path": "影像路径:",
+                "update_image": "更新影像",
+                "label_path": "标签路径:",
+                "update_labels": "更新标签",
+                "overlay_settings": "叠加设置",
+                "show_overlay": "显示叠加",
+                "alpha": "透明度:",
+                "label_colors": "标签颜色",
+                "no_labels_found": "未找到标签",
+                "no_labels_loaded": "未加载标签",
+                "label_prefix": "标签",
+                
+                # View titles
+                "axial_view": "轴向 (XY)",
+                "sagittal_view": "矢状 (YZ)",
+                "coronal_view": "冠状 (XZ)",
+                
+                # About dialog
+                "close": "关闭",
+                
+                # About dialog content
+                "other_languages": "其他语言",
+                "select_language": "选择语言：",
+                "about_what_is": "什么是医学影像查看器？",
+                "about_description": "简单快速的医学影像查看工具。支持查看磁共振(MRI)扫描图像、叠加图层和分割掩膜，同时显示三个角度的切面视图。",
+                "about_how_to_use": "如何使用",
+                "about_load_files": "<b>加载文件：</b>使用文件菜单 → 加载影像/标签，或在右侧面板输入文件路径",
+                "about_navigate": "<b>导航操作：</b>鼠标滚轮切换切片，Ctrl+滚轮缩放视图",
+                "about_pan_rotate": "<b>平移旋转：</b>右键拖拽移动视图，点击旋转按钮翻转方向",
+                "about_overlays": "<b>叠加显示：</b>勾选\"显示叠加\"并调节透明度滑条",
+                "about_save": "<b>保存：</b>文件 → 保存截图 (Ctrl+S) 或保存体数据 (Ctrl+Shift+S)",
+                "about_shortcuts": "快捷键一览",
+                "about_open_image": "打开影像文件",
+                "about_open_labels": "打开标签文件",
+                "about_save_screenshot": "保存截图",
+                "about_save_volume": "打开体数据保存菜单",
+                "about_reset": "重置视图并清空缓存",
+                "about_toggle_panel": "切换控制面板显示",
+                "about_fit_views": "适应所有视图到窗口",
+                "about_show_dialog": "显示此对话框",
+                "about_scroll_slices": "切换切片",
+                "about_zoom": "缩放视图",
+                "about_pan_view": "平移视图",
+                "about_command_line": "命令行选项",
+                "about_command_help": "运行 <code>python nifti_viewer.py --help</code> 查看完整选项。<br>示例：<code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "文件支持",
+                "about_file_formats": "支持 NIfTI (.nii, .nii.gz) 和 MetaImage (.mha, .mhd) 格式。",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "文件操作",
+                "view_controls": "视图控制",
+                "overlay_controls": "叠加控制",
+                "measurement_tools": "测量工具",
+                "measurement_settings": "测量设置",
+                
+                # Control panel elements
+                "no_image_loaded": "未加载影像...",
+                "no_labels_loaded_placeholder": "未加载标签...",
+                "slice": "切片:",
+                "rotate_90": "旋转90°",
+                "reset_to_defaults": "重置为默认",
+                "alpha_label": "透明度: 0.50",
+                
+                # View names
+                "axial": "轴向",
+                "sagittal": "矢状",
+                "coronal": "冠状",
+                
+                # Measurement tools
+                "line_tool": "线条工具",
+                "eraser": "橡皮擦",
+                "export_csv": "导出CSV",
+                "measurements": "测量:",
+                "select_all": "全选",
+                "deselect_all": "取消全选",
+                "line_width": "线宽:",
+                "line_color": "线条颜色:",
+                "text_color": "文字颜色:",
+                "font_size": "字体大小:",
+                "font_weight": "字体粗细:",
+                "auto_snap": "自动吸附:",
+                "enable_endpoint_snapping": "启用端点吸附",
+                "snap_distance": "吸附距离:",
+                "apply_to_selected": "应用到选中线条",
+                "apply_to_all": "应用到全部",
+                "normal": "正常",
+                "bold": "粗体",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "隐藏控制面板 (Ctrl+T)",
+                "copy_coordinates": "复制坐标",
+                "copy_length": "复制长度",
+                "apply_style_to_all": "应用样式到所有",
+                "select_label_color": "选择标签颜色",
+                "delete": "删除",
+                "alpha": "透明度",
+            },
+            "fr": {
+                # Window titles
+                "window_title": "Visionneuse d'Images Médicales",
+                "about_title": "À propos de la Visionneuse d'Images Médicales",
+                
+                # Menu items
+                "menu_file": "Fichier",
+                "menu_view": "Affichage",
+                "menu_help": "Aide",
+                "load_image": "Charger une Image...",
+                "load_labels": "Charger des Étiquettes...",
+                "save": "Enregistrer",
+                "save_image": "Image Seule...",
+                "save_label": "Étiquette Seule...",
+                "save_overlay": "Image Superposée...",
+                "save_screenshot": "Enregistrer la Capture d'Écran...",
+                "reset": "Réinitialiser",
+                "exit": "Quitter",
+                "fit_all_views": "Ajuster Toutes les Vues",
+                "toggle_control_panel": "Basculer le Panneau de Contrôle",
+                "about": "À propos...",
+                "language": "Langue",
+                
+                # Status messages
+                "status_ready": "Prêt - Chargez une image pour commencer",
+                "status_loading_image": "Chargement de l'image...",
+                "status_loading_labels": "Chargement des étiquettes...",
+                "status_loading_image_path": "Chargement de l'image depuis le chemin...",
+                "status_loading_labels_path": "Chargement des étiquettes depuis le chemin...",
+                "status_load_failed": "Échec du chargement",
+                "position": "Position:",
+                
+                # Control panel
+                "controls": "Contrôles",
+                "load_image_btn": "Charger une Image (Ctrl+O)",
+                "load_labels_btn": "Charger des Étiquettes (Ctrl+L)",
+                "reset_btn": "Réinitialiser (Ctrl+R)",
+                "image_path": "Chemin de l'Image:",
+                "update_image": "Mettre à jour l'Image",
+                "label_path": "Chemin des Étiquettes:",
+                "update_labels": "Mettre à jour les Étiquettes",
+                "overlay_settings": "Paramètres de Superposition",
+                "show_overlay": "Afficher la Superposition",
+                "alpha": "Alpha:",
+                "label_colors": "Couleurs des Étiquettes",
+                "no_labels_found": "Aucune étiquette trouvée",
+                "no_labels_loaded": "Aucune étiquette chargée",
+                "label_prefix": "Étiquette",
+                
+                # View titles
+                "axial_view": "Axial (XY)",
+                "sagittal_view": "Sagittal (YZ)",
+                "coronal_view": "Coronal (XZ)",
+                
+                # About dialog
+                "close": "Fermer",
+                
+                # About dialog content
+                "other_languages": "Autres Langues",
+                "select_language": "Sélectionner la langue :",
+                "about_what_is": "Qu'est-ce que cette Visionneuse ?",
+                "about_description": "Une visionneuse simple et rapide pour les images médicales. Visualisez les examens IRM, les superpositions et les masques de segmentation dans trois perspectives simultanément.",
+                "about_how_to_use": "Comment l'Utiliser",
+                "about_load_files": "<b>Charger des Fichiers :</b> Utilisez le menu Fichier → Charger Image/Étiquettes, ou tapez les chemins dans le panneau de droite",
+                "about_navigate": "<b>Naviguer :</b> La molette de la souris fait défiler les coupes, Ctrl+molette zoome",
+                "about_pan_rotate": "<b>Panoramique et Rotation :</b> Clic droit et glisser pour déplacer la vue, cliquez sur les boutons de rotation pour retourner",
+                "about_overlays": "<b>Superpositions :</b> Cochez \"Afficher la Superposition\" et ajustez le curseur de transparence",
+                "about_save": "<b>Enregistrer :</b> Fichier → Enregistrer Capture d'Écran (Ctrl+S) ou Volume (Ctrl+Shift+S)",
+                "about_shortcuts": "Raccourcis Clavier",
+                "about_open_image": "Ouvrir un fichier image",
+                "about_open_labels": "Ouvrir un fichier d'étiquettes",
+                "about_save_screenshot": "Enregistrer capture d'écran",
+                "about_save_volume": "Ouvrir le menu d'enregistrement de volume",
+                "about_reset": "Réinitialiser les vues et vider le cache",
+                "about_toggle_panel": "Basculer le panneau de contrôle",
+                "about_fit_views": "Ajuster toutes les vues à la fenêtre",
+                "about_show_dialog": "Afficher cette boîte de dialogue",
+                "about_scroll_slices": "Faire défiler les coupes",
+                "about_zoom": "Zoomer/Dézoomer",
+                "about_pan_view": "Panoramique de la vue",
+                "about_command_line": "Options de Ligne de Commande",
+                "about_command_help": "Exécutez <code>python nifti_viewer.py --help</code> pour les options complètes.<br>Exemples : <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "Support de Fichiers",
+                "about_file_formats": "Supporte les formats NIfTI (.nii, .nii.gz) et MetaImage (.mha, .mhd).",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "Opérations sur les Fichiers",
+                "view_controls": "Contrôles d'Affichage",
+                "overlay_controls": "Contrôles de Superposition",
+                "measurement_tools": "Outils de Mesure",
+                "measurement_settings": "Paramètres de Mesure",
+                
+                # Control panel elements
+                "no_image_loaded": "Aucune image chargée...",
+                "no_labels_loaded_placeholder": "Aucune étiquette chargée...",
+                "slice": "Tranche:",
+                "rotate_90": "Rotation 90°",
+                "reset_to_defaults": "Rétablir par Défaut",
+                "alpha_label": "Alpha: 0.50",
+                
+                # View names
+                "axial": "Axial",
+                "sagittal": "Sagittal",
+                "coronal": "Coronal",
+                
+                # Measurement tools
+                "line_tool": "Outil Ligne",
+                "eraser": "Gomme",
+                "export_csv": "Exporter CSV",
+                "measurements": "Mesures:",
+                "select_all": "Tout Sélectionner",
+                "deselect_all": "Tout Désélectionner",
+                "line_width": "Largeur de Ligne:",
+                "line_color": "Couleur de Ligne:",
+                "text_color": "Couleur du Texte:",
+                "font_size": "Taille de Police:",
+                "font_weight": "Graisse de Police:",
+                "auto_snap": "Accrochage Auto:",
+                "enable_endpoint_snapping": "Activer l'accrochage des points",
+                "snap_distance": "Distance d'Accrochage:",
+                "apply_to_selected": "Appliquer à la Sélection",
+                "apply_to_all": "Appliquer à Tout",
+                "normal": "Normal",
+                "bold": "Gras",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "Masquer le Panneau de Contrôle (Ctrl+T)",
+                "copy_coordinates": "Copier les Coordonnées",
+                "copy_length": "Copier la Longueur",
+                "apply_style_to_all": "Appliquer le Style à Tout",
+                "select_label_color": "Sélectionner la Couleur d'Étiquette",
+                "delete": "Supprimer",
+                "alpha": "Alpha",
+            },
+            "de": {
+                # Window titles
+                "window_title": "Medizinischer Bildviewer",
+                "about_title": "Über den Medizinischen Bildviewer",
+                
+                # Menu items
+                "menu_file": "Datei",
+                "menu_view": "Ansicht",
+                "menu_help": "Hilfe",
+                "load_image": "Bild laden...",
+                "load_labels": "Labels laden...",
+                "save": "Speichern",
+                "save_image": "Nur Bild...",
+                "save_label": "Nur Label...",
+                "save_overlay": "Überlagertes Bild...",
+                "save_screenshot": "Screenshot speichern...",
+                "reset": "Zurücksetzen",
+                "exit": "Beenden",
+                "fit_all_views": "Alle Ansichten anpassen",
+                "toggle_control_panel": "Kontrollpanel umschalten",
+                "about": "Über...",
+                "language": "Sprache",
+                
+                # Status messages
+                "status_ready": "Bereit - Laden Sie ein Bild zum Starten",
+                "status_loading_image": "Lade Bild...",
+                "status_loading_labels": "Lade Labels...",
+                "status_loading_image_path": "Lade Bild vom Pfad...",
+                "status_loading_labels_path": "Lade Labels vom Pfad...",
+                "status_load_failed": "Laden fehlgeschlagen",
+                "position": "Position:",
+                
+                # Control panel
+                "controls": "Steuerung",
+                "load_image_btn": "Bild laden (Strg+O)",
+                "load_labels_btn": "Labels laden (Strg+L)",
+                "reset_btn": "Zurücksetzen (Strg+R)",
+                "image_path": "Bildpfad:",
+                "update_image": "Bild aktualisieren",
+                "label_path": "Label-Pfad:",
+                "update_labels": "Labels aktualisieren",
+                "overlay_settings": "Überlagerungs-Einstellungen",
+                "show_overlay": "Überlagerung anzeigen",
+                "alpha": "Alpha:",
+                "label_colors": "Label-Farben",
+                "no_labels_found": "Keine Labels gefunden",
+                "no_labels_loaded": "Keine Labels geladen",
+                "label_prefix": "Label",
+                
+                # View titles
+                "axial_view": "Axial (XY)",
+                "sagittal_view": "Sagittal (YZ)",
+                "coronal_view": "Koronal (XZ)",
+                
+                # About dialog
+                "close": "Schließen",
+                
+                # About dialog content
+                "other_languages": "Andere Sprachen",
+                "select_language": "Sprache auswählen:",
+                "about_what_is": "Was ist dieser Viewer?",
+                "about_description": "Ein einfacher, schneller Viewer für medizinische Bilder. Betrachten Sie MRT-Scans, Überlagerungen und Segmentierungsmasken in drei Perspektiven gleichzeitig.",
+                "about_how_to_use": "Wie zu verwenden",
+                "about_load_files": "<b>Dateien laden:</b> Verwenden Sie Datei-Menü → Bild/Labels laden, oder geben Sie Pfade im rechten Panel ein",
+                "about_navigate": "<b>Navigation:</b> Mausrad scrollt durch Schichten, Strg+Rad zoomt hinein/heraus",
+                "about_pan_rotate": "<b>Schwenken & Drehen:</b> Rechtsklick-Ziehen zum Bewegen der Ansicht, Rotations-Buttons zum Umdrehen klicken",
+                "about_overlays": "<b>Überlagerungen:</b> \"Überlagerung anzeigen\" aktivieren und Transparenz-Schieber anpassen",
+                "about_save": "<b>Speichern:</b> Datei → Screenshot speichern (Strg+S) oder Volumen (Strg+Umschalt+S)",
+                "about_shortcuts": "Tastenkürzel",
+                "about_open_image": "Bilddatei öffnen",
+                "about_open_labels": "Label-Datei öffnen",
+                "about_save_screenshot": "Screenshot speichern",
+                "about_save_volume": "Volumen-Speichern-Menü öffnen",
+                "about_reset": "Ansichten zurücksetzen und Cache leeren",
+                "about_toggle_panel": "Kontrollpanel umschalten",
+                "about_fit_views": "Alle Ansichten an Fenster anpassen",
+                "about_show_dialog": "Diesen Dialog anzeigen",
+                "about_scroll_slices": "Durch Schichten scrollen",
+                "about_zoom": "Hinein-/Herauszoomen",
+                "about_pan_view": "Ansicht schwenken",
+                "about_command_line": "Kommandozeilen-Optionen",
+                "about_command_help": "Führen Sie <code>python nifti_viewer.py --help</code> für vollständige Optionen aus.<br>Beispiele: <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "Datei-Unterstützung",
+                "about_file_formats": "Unterstützt NIfTI (.nii, .nii.gz) und MetaImage (.mha, .mhd) Formate.",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "Datei-Operationen",
+                "view_controls": "Ansichts-Steuerung",
+                "overlay_controls": "Überlagerungs-Steuerung",
+                "measurement_tools": "Mess-Werkzeuge",
+                "measurement_settings": "Mess-Einstellungen",
+                
+                # Control panel elements
+                "no_image_loaded": "Kein Bild geladen...",
+                "no_labels_loaded_placeholder": "Keine Labels geladen...",
+                "slice": "Schnitt:",
+                "rotate_90": "90° drehen",
+                "reset_to_defaults": "Auf Standard zurücksetzen",
+                "alpha_label": "Alpha: 0.50",
+                
+                # View names
+                "axial": "Axial",
+                "sagittal": "Sagittal",
+                "coronal": "Koronal",
+                
+                # Measurement tools
+                "line_tool": "Linien-Werkzeug",
+                "eraser": "Radierer",
+                "export_csv": "CSV exportieren",
+                "measurements": "Messungen:",
+                "select_all": "Alle auswählen",
+                "deselect_all": "Alle abwählen",
+                "line_width": "Linienbreite:",
+                "line_color": "Linienfarbe:",
+                "text_color": "Textfarbe:",
+                "font_size": "Schriftgröße:",
+                "font_weight": "Schriftstärke:",
+                "auto_snap": "Auto-Einrasten:",
+                "enable_endpoint_snapping": "Endpunkt-Einrasten aktivieren",
+                "snap_distance": "Einrast-Abstand:",
+                "apply_to_selected": "Auf Ausgewählte anwenden",
+                "apply_to_all": "Auf Alle anwenden",
+                "normal": "Normal",
+                "bold": "Fett",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "Kontrollfeld Ausblenden (Ctrl+T)",
+                "copy_coordinates": "Koordinaten Kopieren",
+                "copy_length": "Länge Kopieren",
+                "apply_style_to_all": "Stil auf Alle Anwenden",
+                "select_label_color": "Label-Farbe Auswählen",
+                "delete": "Löschen",
+                "alpha": "Alpha",
+            },
+            "ja": {
+                # Window titles
+                "window_title": "医療画像ビューア",
+                "about_title": "医療画像ビューアについて",
+                
+                # Menu items
+                "menu_file": "ファイル",
+                "menu_view": "表示",
+                "menu_help": "ヘルプ",
+                "load_image": "画像を読み込み...",
+                "load_labels": "ラベルを読み込み...",
+                "save": "保存",
+                "save_image": "画像のみ...",
+                "save_label": "ラベルのみ...",
+                "save_overlay": "オーバーレイ画像...",
+                "save_screenshot": "スクリーンショットを保存...",
+                "reset": "リセット",
+                "exit": "終了",
+                "fit_all_views": "すべてのビューに合わせる",
+                "toggle_control_panel": "コントロールパネルの切り替え",
+                "about": "について...",
+                "language": "言語",
+                
+                # Status messages
+                "status_ready": "準備完了 - 開始するには画像を読み込んでください",
+                "status_loading_image": "画像を読み込み中...",
+                "status_loading_labels": "ラベルを読み込み中...",
+                "status_loading_image_path": "パスから画像を読み込み中...",
+                "status_loading_labels_path": "パスからラベルを読み込み中...",
+                "status_load_failed": "読み込みに失敗しました",
+                "position": "位置:",
+                
+                # Control panel
+                "controls": "コントロール",
+                "load_image_btn": "画像を読み込み (Ctrl+O)",
+                "load_labels_btn": "ラベルを読み込み (Ctrl+L)",
+                "reset_btn": "リセット (Ctrl+R)",
+                "image_path": "画像パス:",
+                "update_image": "画像を更新",
+                "label_path": "ラベルパス:",
+                "update_labels": "ラベルを更新",
+                "overlay_settings": "オーバーレイ設定",
+                "show_overlay": "オーバーレイを表示",
+                "alpha": "アルファ:",
+                "label_colors": "ラベル色",
+                "no_labels_found": "ラベルが見つかりません",
+                "no_labels_loaded": "ラベルが読み込まれていません",
+                "label_prefix": "ラベル",
+                
+                # View titles
+                "axial_view": "軸位 (XY)",
+                "sagittal_view": "矢状 (YZ)",
+                "coronal_view": "冠状 (XZ)",
+                
+                # About dialog
+                "close": "閉じる",
+                
+                # About dialog content
+                "other_languages": "その他の言語",
+                "select_language": "言語を選択：",
+                "about_what_is": "このビューアとは？",
+                "about_description": "医療画像のためのシンプルで高速なビューア。MRIスキャン、オーバーレイ、セグメンテーションマスクを3つの視点で同時に表示します。",
+                "about_how_to_use": "使用方法",
+                "about_load_files": "<b>ファイル読み込み：</b>ファイルメニュー → 画像/ラベル読み込み、または右パネルでパスを入力",
+                "about_navigate": "<b>ナビゲーション：</b>マウスホイールでスライス移動、Ctrl+ホイールでズーム",
+                "about_pan_rotate": "<b>パン・回転：</b>右クリックドラッグでビュー移動、回転ボタンで反転",
+                "about_overlays": "<b>オーバーレイ：</b>「オーバーレイ表示」をチェックし、透明度スライダーを調整",
+                "about_save": "<b>保存：</b>ファイル → スクリーンショット保存 (Ctrl+S) またはボリューム (Ctrl+Shift+S)",
+                "about_shortcuts": "キーボードショートカット",
+                "about_open_image": "画像ファイルを開く",
+                "about_open_labels": "ラベルファイルを開く",
+                "about_save_screenshot": "スクリーンショット保存",
+                "about_save_volume": "ボリューム保存メニューを開く",
+                "about_reset": "ビューをリセットしキャッシュをクリア",
+                "about_toggle_panel": "コントロールパネル切り替え",
+                "about_fit_views": "すべてのビューをウィンドウに合わせる",
+                "about_show_dialog": "このダイアログを表示",
+                "about_scroll_slices": "スライス間をスクロール",
+                "about_zoom": "ズームイン/アウト",
+                "about_pan_view": "ビューをパン",
+                "about_command_line": "コマンドラインオプション",
+                "about_command_help": "完全なオプションは <code>python nifti_viewer.py --help</code> を実行してください。<br>例：<code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "ファイルサポート",
+                "about_file_formats": "NIfTI (.nii, .nii.gz) および MetaImage (.mha, .mhd) 形式をサポート。",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "ファイル操作",
+                "view_controls": "表示コントロール",
+                "overlay_controls": "オーバーレイコントロール",
+                "measurement_tools": "測定ツール",
+                "measurement_settings": "測定設定",
+                
+                # Control panel elements
+                "no_image_loaded": "画像が読み込まれていません...",
+                "no_labels_loaded_placeholder": "ラベルが読み込まれていません...",
+                "slice": "スライス:",
+                "rotate_90": "90°回転",
+                "reset_to_defaults": "デフォルトにリセット",
+                "alpha_label": "アルファ: 0.50",
+                
+                # View names
+                "axial": "軸位",
+                "sagittal": "矢状",
+                "coronal": "冠状",
+                
+                # Measurement tools
+                "line_tool": "ラインツール",
+                "eraser": "消しゴム",
+                "export_csv": "CSV出力",
+                "measurements": "測定:",
+                "select_all": "すべて選択",
+                "deselect_all": "すべて選択解除",
+                "line_width": "線の太さ:",
+                "line_color": "線の色:",
+                "text_color": "テキスト色:",
+                "font_size": "フォントサイズ:",
+                "font_weight": "フォントの太さ:",
+                "auto_snap": "自動スナップ:",
+                "enable_endpoint_snapping": "エンドポイントスナップを有効化",
+                "snap_distance": "スナップ距離:",
+                "apply_to_selected": "選択項目に適用",
+                "apply_to_all": "すべてに適用",
+                "normal": "標準",
+                "bold": "太字",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "コントロールパネルを隠す (Ctrl+T)",
+                "copy_coordinates": "座標をコピー",
+                "copy_length": "長さをコピー",
+                "apply_style_to_all": "スタイルをすべてに適用",
+                "select_label_color": "ラベル色を選択",
+                "delete": "削除",
+                "alpha": "アルファ",
+            },
+            "ko": {
+                # Window titles
+                "window_title": "의료 영상 뷰어",
+                "about_title": "의료 영상 뷰어 정보",
+                
+                # Menu items
+                "menu_file": "파일",
+                "menu_view": "보기",
+                "menu_help": "도움말",
+                "load_image": "이미지 불러오기...",
+                "load_labels": "라벨 불러오기...",
+                "save": "저장",
+                "save_image": "이미지만...",
+                "save_label": "라벨만...",
+                "save_overlay": "오버레이 이미지...",
+                "save_screenshot": "스크린샷 저장...",
+                "reset": "초기화",
+                "exit": "종료",
+                "fit_all_views": "모든 뷰에 맞춤",
+                "toggle_control_panel": "제어판 토글",
+                "about": "정보...",
+                "language": "언어",
+                
+                # Status messages
+                "status_ready": "준비 완료 - 시작하려면 이미지를 불러오세요",
+                "status_loading_image": "이미지 불러오는 중...",
+                "status_loading_labels": "라벨 불러오는 중...",
+                "status_loading_image_path": "경로에서 이미지 불러오는 중...",
+                "status_loading_labels_path": "경로에서 라벨 불러오는 중...",
+                "status_load_failed": "불러오기 실패",
+                "position": "위치:",
+                
+                # Control panel
+                "controls": "제어",
+                "load_image_btn": "이미지 불러오기 (Ctrl+O)",
+                "load_labels_btn": "라벨 불러오기 (Ctrl+L)",
+                "reset_btn": "초기화 (Ctrl+R)",
+                "image_path": "이미지 경로:",
+                "update_image": "이미지 업데이트",
+                "label_path": "라벨 경로:",
+                "update_labels": "라벨 업데이트",
+                "overlay_settings": "오버레이 설정",
+                "show_overlay": "오버레이 표시",
+                "alpha": "알파:",
+                "label_colors": "라벨 색상",
+                "no_labels_found": "라벨을 찾을 수 없음",
+                "no_labels_loaded": "라벨이 로드되지 않음",
+                "label_prefix": "라벨",
+                
+                # View titles
+                "axial_view": "축상 (XY)",
+                "sagittal_view": "시상 (YZ)",
+                "coronal_view": "관상 (XZ)",
+                
+                # About dialog
+                "close": "닫기",
+                
+                # About dialog content
+                "other_languages": "기타 언어",
+                "select_language": "언어 선택:",
+                "about_what_is": "이 뷰어란 무엇인가요?",
+                "about_description": "의료 영상을 위한 간단하고 빠른 뷰어입니다. MRI 스캔, 오버레이, 분할 마스크를 세 가지 관점에서 동시에 볼 수 있습니다.",
+                "about_how_to_use": "사용 방법",
+                "about_load_files": "<b>파일 로드:</b> 파일 메뉴 → 영상/라벨 로드 사용, 또는 오른쪽 패널에 경로 입력",
+                "about_navigate": "<b>탐색:</b> 마우스 휠로 슬라이스 스크롤, Ctrl+휠로 확대/축소",
+                "about_pan_rotate": "<b>팬 및 회전:</b> 우클릭 드래그로 뷰 이동, 회전 버튼 클릭으로 뒤집기",
+                "about_overlays": "<b>오버레이:</b> \"오버레이 표시\"를 체크하고 투명도 슬라이더 조정",
+                "about_save": "<b>저장:</b> 파일 → 스크린샷 저장 (Ctrl+S) 또는 볼륨 (Ctrl+Shift+S)",
+                "about_shortcuts": "키보드 단축키",
+                "about_open_image": "영상 파일 열기",
+                "about_open_labels": "라벨 파일 열기",
+                "about_save_screenshot": "스크린샷 저장",
+                "about_save_volume": "볼륨 저장 메뉴 열기",
+                "about_reset": "뷰 재설정 및 캐시 지우기",
+                "about_toggle_panel": "제어 패널 토글",
+                "about_fit_views": "모든 뷰를 창에 맞추기",
+                "about_show_dialog": "이 대화상자 표시",
+                "about_scroll_slices": "슬라이스 스크롤",
+                "about_zoom": "확대/축소",
+                "about_pan_view": "뷰 팬",
+                "about_command_line": "명령줄 옵션",
+                "about_command_help": "전체 옵션은 <code>python nifti_viewer.py --help</code>를 실행하세요.<br>예시: <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "파일 지원",
+                "about_file_formats": "NIfTI (.nii, .nii.gz) 및 MetaImage (.mha, .mhd) 형식을 지원합니다.",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "파일 작업",
+                "view_controls": "뷰 컨트롤",
+                "overlay_controls": "오버레이 컨트롤",
+                "measurement_tools": "측정 도구",
+                "measurement_settings": "측정 설정",
+                
+                # Control panel elements
+                "no_image_loaded": "이미지가 로드되지 않음...",
+                "no_labels_loaded_placeholder": "라벨이 로드되지 않음...",
+                "slice": "슬라이스:",
+                "rotate_90": "90° 회전",
+                "reset_to_defaults": "기본값으로 초기화",
+                "alpha_label": "알파: 0.50",
+                
+                # View names
+                "axial": "축상",
+                "sagittal": "시상",
+                "coronal": "관상",
+                
+                # Measurement tools
+                "line_tool": "라인 도구",
+                "eraser": "지우개",
+                "export_csv": "CSV 내보내기",
+                "measurements": "측정:",
+                "select_all": "모두 선택",
+                "deselect_all": "모두 선택 해제",
+                "line_width": "선 두께:",
+                "line_color": "선 색상:",
+                "text_color": "텍스트 색상:",
+                "font_size": "폰트 크기:",
+                "font_weight": "폰트 굵기:",
+                "auto_snap": "자동 스냅:",
+                "enable_endpoint_snapping": "끝점 스냅 활성화",
+                "snap_distance": "스냅 거리:",
+                "apply_to_selected": "선택항목에 적용",
+                "apply_to_all": "모든 항목에 적용",
+                "normal": "보통",
+                "bold": "굵게",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "제어 패널 숨기기 (Ctrl+T)",
+                "copy_coordinates": "좌표 복사",
+                "copy_length": "길이 복사",
+                "apply_style_to_all": "모든 항목에 스타일 적용",
+                "select_label_color": "라벨 색상 선택",
+                "delete": "삭제",
+                "alpha": "알파",
+            },
+            "es": {
+                # Window titles
+                "window_title": "Visor de Imágenes Médicas",
+                "about_title": "Acerca del Visor de Imágenes Médicas",
+                
+                # Menu items
+                "menu_file": "Archivo",
+                "menu_view": "Ver",
+                "menu_help": "Ayuda",
+                "load_image": "Cargar Imagen...",
+                "load_labels": "Cargar Etiquetas...",
+                "save": "Guardar",
+                "save_image": "Solo Imagen...",
+                "save_label": "Solo Etiqueta...",
+                "save_overlay": "Imagen Superpuesta...",
+                "save_screenshot": "Guardar Captura de Pantalla...",
+                "reset": "Restablecer",
+                "exit": "Salir",
+                "fit_all_views": "Ajustar Todas las Vistas",
+                "toggle_control_panel": "Alternar Panel de Control",
+                "about": "Acerca de...",
+                "language": "Idioma",
+                
+                # Status messages
+                "status_ready": "Listo - Cargue una imagen para comenzar",
+                "status_loading_image": "Cargando imagen...",
+                "status_loading_labels": "Cargando etiquetas...",
+                "status_loading_image_path": "Cargando imagen desde ruta...",
+                "status_loading_labels_path": "Cargando etiquetas desde ruta...",
+                "status_load_failed": "Error al cargar",
+                "position": "Posición:",
+                
+                # Control panel
+                "controls": "Controles",
+                "load_image_btn": "Cargar Imagen (Ctrl+O)",
+                "load_labels_btn": "Cargar Etiquetas (Ctrl+L)",
+                "reset_btn": "Restablecer (Ctrl+R)",
+                "image_path": "Ruta de Imagen:",
+                "update_image": "Actualizar Imagen",
+                "label_path": "Ruta de Etiquetas:",
+                "update_labels": "Actualizar Etiquetas",
+                "overlay_settings": "Configuración de Superposición",
+                "show_overlay": "Mostrar Superposición",
+                "alpha": "Alfa:",
+                "label_colors": "Colores de Etiquetas",
+                "no_labels_found": "No se encontraron etiquetas",
+                "no_labels_loaded": "No se cargaron etiquetas",
+                "label_prefix": "Etiqueta",
+                
+                # View titles
+                "axial_view": "Axial (XY)",
+                "sagittal_view": "Sagital (YZ)",
+                "coronal_view": "Coronal (XZ)",
+                
+                # About dialog
+                "close": "Cerrar",
+                
+                # About dialog content
+                "other_languages": "Otros Idiomas",
+                "select_language": "Seleccionar idioma:",
+                "about_what_is": "¿Qué es este Visor?",
+                "about_description": "Un visor simple y rápido para imágenes médicas. Vea escaneos de resonancia magnética, superposiciones y máscaras de segmentación en tres perspectivas simultáneamente.",
+                "about_how_to_use": "Cómo Usar",
+                "about_load_files": "<b>Cargar Archivos:</b> Use el menú Archivo → Cargar Imagen/Etiquetas, o escriba rutas en el panel derecho",
+                "about_navigate": "<b>Navegar:</b> La rueda del ratón desplaza por las secciones, Ctrl+rueda hace zoom",
+                "about_pan_rotate": "<b>Panorámica y Rotación:</b> Clic derecho y arrastrar para mover la vista, clic en botones de rotación para voltear",
+                "about_overlays": "<b>Superposiciones:</b> Marque \"Mostrar Superposición\" y ajuste el deslizador de transparencia",
+                "about_save": "<b>Guardar:</b> Archivo → Guardar Captura de Pantalla (Ctrl+S) o Volumen (Ctrl+Shift+S)",
+                "about_shortcuts": "Atajos de Teclado",
+                "about_open_image": "Abrir archivo de imagen",
+                "about_open_labels": "Abrir archivo de etiquetas",
+                "about_save_screenshot": "Guardar captura de pantalla",
+                "about_save_volume": "Abrir menú de guardar volumen",
+                "about_reset": "Restablecer vistas y limpiar caché",
+                "about_toggle_panel": "Alternar panel de control",
+                "about_fit_views": "Ajustar todas las vistas a la ventana",
+                "about_show_dialog": "Mostrar este diálogo",
+                "about_scroll_slices": "Desplazar por las secciones",
+                "about_zoom": "Acercar/Alejar",
+                "about_pan_view": "Panorámica de la vista",
+                "about_command_line": "Opciones de Línea de Comandos",
+                "about_command_help": "Ejecute <code>python nifti_viewer.py --help</code> para opciones completas.<br>Ejemplos: <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "Soporte de Archivos",
+                "about_file_formats": "Soporta formatos NIfTI (.nii, .nii.gz) y MetaImage (.mha, .mhd).",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "Operaciones de Archivo",
+                "view_controls": "Controles de Vista",
+                "overlay_controls": "Controles de Superposición",
+                "measurement_tools": "Herramientas de Medición",
+                "measurement_settings": "Configuración de Medición",
+                
+                # Control panel elements
+                "no_image_loaded": "No hay imagen cargada...",
+                "no_labels_loaded_placeholder": "No hay etiquetas cargadas...",
+                "slice": "Corte:",
+                "rotate_90": "Rotar 90°",
+                "reset_to_defaults": "Restablecer por Defecto",
+                "alpha_label": "Alfa: 0.50",
+                
+                # View names
+                "axial": "Axial",
+                "sagittal": "Sagital",
+                "coronal": "Coronal",
+                
+                # Measurement tools
+                "line_tool": "Herramienta de Línea",
+                "eraser": "Borrador",
+                "export_csv": "Exportar CSV",
+                "measurements": "Mediciones:",
+                "select_all": "Seleccionar Todo",
+                "deselect_all": "Deseleccionar Todo",
+                "line_width": "Ancho de Línea:",
+                "line_color": "Color de Línea:",
+                "text_color": "Color de Texto:",
+                "font_size": "Tamaño de Fuente:",
+                "font_weight": "Peso de Fuente:",
+                "auto_snap": "Ajuste Automático:",
+                "enable_endpoint_snapping": "Activar ajuste de extremos",
+                "snap_distance": "Distancia de Ajuste:",
+                "apply_to_selected": "Aplicar a Seleccionados",
+                "apply_to_all": "Aplicar a Todos",
+                "normal": "Normal",
+                "bold": "Negrita",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "Ocultar Panel de Control (Ctrl+T)",
+                "copy_coordinates": "Copiar Coordenadas",
+                "copy_length": "Copiar Longitud",
+                "apply_style_to_all": "Aplicar Estilo a Todo",
+                "select_label_color": "Seleccionar Color de Etiqueta",
+                "delete": "Eliminar",
+                "alpha": "Alfa",
+            },
+            "zh-TW": {
+                # Window titles
+                "window_title": "醫學影像檢視器",
+                "about_title": "關於醫學影像檢視器",
+                
+                # Menu items
+                "menu_file": "檔案",
+                "menu_view": "檢視",
+                "menu_help": "說明",
+                "load_image": "載入影像...",
+                "load_labels": "載入標籤...",
+                "save": "儲存",
+                "save_image": "僅影像...",
+                "save_label": "僅標籤...",
+                "save_overlay": "疊加影像...",
+                "save_screenshot": "儲存螢幕截圖...",
+                "reset": "重設",
+                "exit": "結束",
+                "fit_all_views": "適應所有檢視",
+                "toggle_control_panel": "切換控制面板",
+                "about": "關於...",
+                "language": "語言",
+                
+                # Status messages
+                "status_ready": "就緒 - 載入影像開始使用",
+                "status_loading_image": "正在載入影像...",
+                "status_loading_labels": "正在載入標籤...",
+                "status_loading_image_path": "正在從路徑載入影像...",
+                "status_loading_labels_path": "正在從路徑載入標籤...",
+                "status_load_failed": "載入失敗",
+                "position": "位置:",
+                
+                # Control panel
+                "controls": "控制",
+                "load_image_btn": "載入影像 (Ctrl+O)",
+                "load_labels_btn": "載入標籤 (Ctrl+L)",
+                "reset_btn": "重設 (Ctrl+R)",
+                "image_path": "影像路徑:",
+                "update_image": "更新影像",
+                "label_path": "標籤路徑:",
+                "update_labels": "更新標籤",
+                "overlay_settings": "疊加設定",
+                "show_overlay": "顯示疊加",
+                "alpha": "透明度:",
+                "label_colors": "標籤色彩",
+                "no_labels_found": "未找到標籤",
+                "no_labels_loaded": "未載入標籤",
+                "label_prefix": "標籤",
+                
+                # View titles
+                "axial_view": "軸向 (XY)",
+                "sagittal_view": "矢狀 (YZ)",
+                "coronal_view": "冠狀 (XZ)",
+                
+                # About dialog
+                "close": "關閉",
+                
+                # About dialog content
+                "other_languages": "其他語言",
+                "select_language": "選擇語言：",
+                "about_what_is": "什麼是醫學影像檢視器？",
+                "about_description": "簡單快速的醫學影像檢視工具。支援檢視磁共振(MRI)掃描影像、疊加圖層和分割遮罩，同時顯示三個角度的切面檢視。",
+                "about_how_to_use": "如何使用",
+                "about_load_files": "<b>載入檔案：</b>使用檔案選單 → 載入影像/標籤，或在右側面板輸入檔案路徑",
+                "about_navigate": "<b>導航操作：</b>滑鼠滾輪切換切片，Ctrl+滾輪縮放檢視",
+                "about_pan_rotate": "<b>平移旋轉：</b>右鍵拖曳移動檢視，點擊旋轉按鈕翻轉方向",
+                "about_overlays": "<b>疊加顯示：</b>勾選\"顯示疊加\"並調節透明度滑條",
+                "about_save": "<b>儲存：</b>檔案 → 儲存螢幕截圖 (Ctrl+S) 或儲存體資料 (Ctrl+Shift+S)",
+                "about_shortcuts": "快速鍵一覽",
+                "about_open_image": "開啟影像檔案",
+                "about_open_labels": "開啟標籤檔案",
+                "about_save_screenshot": "儲存螢幕截圖",
+                "about_save_volume": "開啟體資料儲存選單",
+                "about_reset": "重設檢視並清空快取",
+                "about_toggle_panel": "切換控制面板顯示",
+                "about_fit_views": "適應所有檢視到視窗",
+                "about_show_dialog": "顯示此對話框",
+                "about_scroll_slices": "切換切片",
+                "about_zoom": "縮放檢視",
+                "about_pan_view": "平移檢視",
+                "about_command_line": "命令列選項",
+                "about_command_help": "執行 <code>python nifti_viewer.py --help</code> 檢視完整選項。<br>範例：<code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "檔案支援",
+                "about_file_formats": "支援 NIfTI (.nii, .nii.gz) 和 MetaImage (.mha, .mhd) 格式。",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "檔案操作",
+                "view_controls": "檢視控制",
+                "overlay_controls": "疊加控制",
+                "measurement_tools": "測量工具",
+                "measurement_settings": "測量設定",
+                
+                # Control panel elements
+                "no_image_loaded": "未載入影像...",
+                "no_labels_loaded_placeholder": "未載入標籤...",
+                "slice": "切片:",
+                "rotate_90": "旋轉90°",
+                "reset_to_defaults": "重設為預設值",
+                "alpha_label": "透明度: 0.50",
+                
+                # View names
+                "axial": "軸向",
+                "sagittal": "矢狀",
+                "coronal": "冠狀",
+                
+                # Measurement tools
+                "line_tool": "線條工具",
+                "eraser": "橡皮擦",
+                "export_csv": "匯出CSV",
+                "measurements": "測量:",
+                "select_all": "全選",
+                "deselect_all": "取消全選",
+                "line_width": "線寬:",
+                "line_color": "線條色彩:",
+                "text_color": "文字色彩:",
+                "font_size": "字型大小:",
+                "font_weight": "字型粗細:",
+                "auto_snap": "自動吸附:",
+                "enable_endpoint_snapping": "啟用端點吸附",
+                "snap_distance": "吸附距離:",
+                "apply_to_selected": "套用至已選取",
+                "apply_to_all": "套用至全部",
+                "normal": "一般",
+                "bold": "粗體",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "隱藏控制面板 (Ctrl+T)",
+                "copy_coordinates": "複製座標",
+                "copy_length": "複製長度",
+                "apply_style_to_all": "套用樣式到全部",
+                "select_label_color": "選擇標籤顏色",
+                "delete": "刪除",
+                "alpha": "透明度",
+            },
+            "it": {
+                # Window titles
+                "window_title": "Visualizzatore di Immagini Mediche",
+                "about_title": "Informazioni sul Visualizzatore di Immagini Mediche",
+                
+                # Menu items
+                "menu_file": "File",
+                "menu_view": "Visualizza",
+                "menu_help": "Aiuto",
+                "load_image": "Carica Immagine...",
+                "load_labels": "Carica Etichette...",
+                "save": "Salva",
+                "save_image": "Solo Immagine...",
+                "save_label": "Solo Etichetta...",
+                "save_overlay": "Immagine Sovrapposta...",
+                "save_screenshot": "Salva Screenshot...",
+                "reset": "Reimposta",
+                "exit": "Esci",
+                "fit_all_views": "Adatta Tutte le Viste",
+                "toggle_control_panel": "Attiva/Disattiva Pannello di Controllo",
+                "about": "Informazioni...",
+                "language": "Lingua",
+                
+                # Status messages
+                "status_ready": "Pronto - Carica un'immagine per iniziare",
+                "status_loading_image": "Caricamento immagine...",
+                "status_loading_labels": "Caricamento etichette...",
+                "status_loading_image_path": "Caricamento immagine dal percorso...",
+                "status_loading_labels_path": "Caricamento etichette dal percorso...",
+                "status_load_failed": "Caricamento fallito",
+                "position": "Posizione:",
+                
+                # Control panel
+                "controls": "Controlli",
+                "load_image_btn": "Carica Immagine (Ctrl+O)",
+                "load_labels_btn": "Carica Etichette (Ctrl+L)",
+                "reset_btn": "Reimposta (Ctrl+R)",
+                "image_path": "Percorso Immagine:",
+                "update_image": "Aggiorna Immagine",
+                "label_path": "Percorso Etichette:",
+                "update_labels": "Aggiorna Etichette",
+                "overlay_settings": "Impostazioni Sovrapposizione",
+                "show_overlay": "Mostra Sovrapposizione",
+                "alpha": "Alfa:",
+                "label_colors": "Colori Etichette",
+                "no_labels_found": "Nessuna etichetta trovata",
+                "no_labels_loaded": "Nessuna etichetta caricata",
+                "label_prefix": "Etichetta",
+                
+                # View titles
+                "axial_view": "Assiale (XY)",
+                "sagittal_view": "Sagittale (YZ)",
+                "coronal_view": "Coronale (XZ)",
+                
+                # About dialog
+                "close": "Chiudi",
+                
+                # About dialog content
+                "other_languages": "Altre Lingue",
+                "select_language": "Seleziona lingua:",
+                "about_what_is": "Cos'è questo Visualizzatore?",
+                "about_description": "Un visualizzatore semplice e veloce per immagini mediche. Visualizza scansioni MRI, sovrapposizioni e maschere di segmentazione in tre prospettive simultaneamente.",
+                "about_how_to_use": "Come Usare",
+                "about_load_files": "<b>Carica File:</b> Usa il menu File → Carica Immagine/Etichette, o digita i percorsi nel pannello destro",
+                "about_navigate": "<b>Navigare:</b> La rotella del mouse scorre le sezioni, Ctrl+rotella fa zoom",
+                "about_pan_rotate": "<b>Panoramica e Rotazione:</b> Clic destro e trascina per muovere la vista, clic sui pulsanti di rotazione per capovolgere",
+                "about_overlays": "<b>Sovrapposizioni:</b> Spunta \"Mostra Sovrapposizione\" e regola il cursore di trasparenza",
+                "about_save": "<b>Salva:</b> File → Salva Screenshot (Ctrl+S) o Volume (Ctrl+Shift+S)",
+                "about_shortcuts": "Scorciatoie da Tastiera",
+                "about_open_image": "Apri file immagine",
+                "about_open_labels": "Apri file etichette",
+                "about_save_screenshot": "Salva screenshot",
+                "about_save_volume": "Apri menu salva volume",
+                "about_reset": "Reimposta viste e svuota cache",
+                "about_toggle_panel": "Attiva/disattiva pannello di controllo",
+                "about_fit_views": "Adatta tutte le viste alla finestra",
+                "about_show_dialog": "Mostra questa finestra di dialogo",
+                "about_scroll_slices": "Scorri le sezioni",
+                "about_zoom": "Zoom avanti/indietro",
+                "about_pan_view": "Panoramica della vista",
+                "about_command_line": "Opzioni Riga di Comando",
+                "about_command_help": "Esegui <code>python nifti_viewer.py --help</code> per le opzioni complete.<br>Esempi: <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "Supporto File",
+                "about_file_formats": "Supporta formati NIfTI (.nii, .nii.gz) e MetaImage (.mha, .mhd).",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "Operazioni File",
+                "view_controls": "Controlli Vista",
+                "overlay_controls": "Controlli Sovrapposizione",
+                "measurement_tools": "Strumenti di Misurazione",
+                "measurement_settings": "Impostazioni Misurazione",
+                
+                # Control panel elements
+                "no_image_loaded": "Nessuna immagine caricata...",
+                "no_labels_loaded_placeholder": "Nessuna etichetta caricata...",
+                "slice": "Fetta:",
+                "rotate_90": "Ruota 90°",
+                "reset_to_defaults": "Ripristina Predefiniti",
+                "alpha_label": "Alfa: 0.50",
+                
+                # View names
+                "axial": "Assiale",
+                "sagittal": "Sagittale",
+                "coronal": "Coronale",
+                
+                # Measurement tools
+                "line_tool": "Strumento Linea",
+                "eraser": "Gomma",
+                "export_csv": "Esporta CSV",
+                "measurements": "Misurazioni:",
+                "select_all": "Seleziona Tutto",
+                "deselect_all": "Deseleziona Tutto",
+                "line_width": "Spessore Linea:",
+                "line_color": "Colore Linea:",
+                "text_color": "Colore Testo:",
+                "font_size": "Dimensione Font:",
+                "font_weight": "Peso Font:",
+                "auto_snap": "Aggancio Automatico:",
+                "enable_endpoint_snapping": "Abilita aggancio estremi",
+                "snap_distance": "Distanza Aggancio:",
+                "apply_to_selected": "Applica ai Selezionati",
+                "apply_to_all": "Applica a Tutti",
+                "normal": "Normale",
+                "bold": "Grassetto",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "Nascondi Pannello di Controllo (Ctrl+T)",
+                "copy_coordinates": "Copia Coordinate",
+                "copy_length": "Copia Lunghezza",
+                "apply_style_to_all": "Applica Stile a Tutto",
+                "select_label_color": "Seleziona Colore Etichetta",
+                "delete": "Elimina",
+                "alpha": "Alfa",
+            },
+            "pt": {
+                # Window titles
+                "window_title": "Visualizador de Imagens Médicas",
+                "about_title": "Sobre o Visualizador de Imagens Médicas",
+                
+                # Menu items
+                "menu_file": "Arquivo",
+                "menu_view": "Visualizar",
+                "menu_help": "Ajuda",
+                "load_image": "Carregar Imagem...",
+                "load_labels": "Carregar Etiquetas...",
+                "save": "Salvar",
+                "save_image": "Apenas Imagem...",
+                "save_label": "Apenas Etiqueta...",
+                "save_overlay": "Imagem Sobreposta...",
+                "save_screenshot": "Salvar Screenshot...",
+                "reset": "Redefinir",
+                "exit": "Sair",
+                "fit_all_views": "Ajustar Todas as Visualizações",
+                "toggle_control_panel": "Alternar Painel de Controle",
+                "about": "Sobre...",
+                "language": "Idioma",
+                
+                # Status messages
+                "status_ready": "Pronto - Carregue uma imagem para começar",
+                "status_loading_image": "Carregando imagem...",
+                "status_loading_labels": "Carregando etiquetas...",
+                "status_loading_image_path": "Carregando imagem do caminho...",
+                "status_loading_labels_path": "Carregando etiquetas do caminho...",
+                "status_load_failed": "Falha no carregamento",
+                "position": "Posição:",
+                
+                # Control panel
+                "controls": "Controles",
+                "load_image_btn": "Carregar Imagem (Ctrl+O)",
+                "load_labels_btn": "Carregar Etiquetas (Ctrl+L)",
+                "reset_btn": "Redefinir (Ctrl+R)",
+                "image_path": "Caminho da Imagem:",
+                "update_image": "Atualizar Imagem",
+                "label_path": "Caminho das Etiquetas:",
+                "update_labels": "Atualizar Etiquetas",
+                "overlay_settings": "Configurações de Sobreposição",
+                "show_overlay": "Mostrar Sobreposição",
+                "alpha": "Alfa:",
+                "label_colors": "Cores das Etiquetas",
+                "no_labels_found": "Nenhuma etiqueta encontrada",
+                "no_labels_loaded": "Nenhuma etiqueta carregada",
+                "label_prefix": "Etiqueta",
+                
+                # View titles
+                "axial_view": "Axial (XY)",
+                "sagittal_view": "Sagital (YZ)",
+                "coronal_view": "Coronal (XZ)",
+                
+                # About dialog
+                "close": "Fechar",
+                
+                # About dialog content
+                "other_languages": "Outros Idiomas",
+                "select_language": "Selecionar idioma:",
+                "about_what_is": "O que é este Visualizador?",
+                "about_description": "Um visualizador simples e rápido para imagens médicas. Visualize exames de ressonância magnética, sobreposições e máscaras de segmentação em três perspectivas simultaneamente.",
+                "about_how_to_use": "Como Usar",
+                "about_load_files": "<b>Carregar Arquivos:</b> Use o menu Arquivo → Carregar Imagem/Rótulos, ou digite caminhos no painel direito",
+                "about_navigate": "<b>Navegar:</b> A roda do mouse navega pelas fatias, Ctrl+roda faz zoom",
+                "about_pan_rotate": "<b>Panorâmica e Rotação:</b> Clique direito e arraste para mover a vista, clique nos botões de rotação para virar",
+                "about_overlays": "<b>Sobreposições:</b> Marque \"Mostrar Sobreposição\" e ajuste o controle deslizante de transparência",
+                "about_save": "<b>Salvar:</b> Arquivo → Salvar Captura de Tela (Ctrl+S) ou Volume (Ctrl+Shift+S)",
+                "about_shortcuts": "Atalhos do Teclado",
+                "about_open_image": "Abrir arquivo de imagem",
+                "about_open_labels": "Abrir arquivo de rótulos",
+                "about_save_screenshot": "Salvar captura de tela",
+                "about_save_volume": "Abrir menu salvar volume",
+                "about_reset": "Redefinir vistas e limpar cache",
+                "about_toggle_panel": "Alternar painel de controle",
+                "about_fit_views": "Ajustar todas as vistas à janela",
+                "about_show_dialog": "Mostrar esta caixa de diálogo",
+                "about_scroll_slices": "Navegar pelas fatias",
+                "about_zoom": "Aumentar/Diminuir zoom",
+                "about_pan_view": "Panorâmica da vista",
+                "about_command_line": "Opções de Linha de Comando",
+                "about_command_help": "Execute <code>python nifti_viewer.py --help</code> para opções completas.<br>Exemplos: <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "Suporte a Arquivos",
+                "about_file_formats": "Suporta formatos NIfTI (.nii, .nii.gz) e MetaImage (.mha, .mhd).",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "Operações de Arquivo",
+                "view_controls": "Controles de Visualização",
+                "overlay_controls": "Controles de Sobreposição",
+                "measurement_tools": "Ferramentas de Medição",
+                "measurement_settings": "Configurações de Medição",
+                
+                # Control panel elements
+                "no_image_loaded": "Nenhuma imagem carregada...",
+                "no_labels_loaded_placeholder": "Nenhuma etiqueta carregada...",
+                "slice": "Fatia:",
+                "rotate_90": "Girar 90°",
+                "reset_to_defaults": "Redefinir para Padrão",
+                "alpha_label": "Alfa: 0.50",
+                
+                # View names
+                "axial": "Axial",
+                "sagittal": "Sagital",
+                "coronal": "Coronal",
+                
+                # Measurement tools
+                "line_tool": "Ferramenta de Linha",
+                "eraser": "Borracha",
+                "export_csv": "Exportar CSV",
+                "measurements": "Medições:",
+                "select_all": "Selecionar Tudo",
+                "deselect_all": "Desselecionar Tudo",
+                "line_width": "Largura da Linha:",
+                "line_color": "Cor da Linha:",
+                "text_color": "Cor do Texto:",
+                "font_size": "Tamanho da Fonte:",
+                "font_weight": "Peso da Fonte:",
+                "auto_snap": "Ajuste Automático:",
+                "enable_endpoint_snapping": "Ativar ajuste de extremidades",
+                "snap_distance": "Distância de Ajuste:",
+                "apply_to_selected": "Aplicar aos Selecionados",
+                "apply_to_all": "Aplicar a Todos",
+                "normal": "Normal",
+                "bold": "Negrito",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "Ocultar Painel de Controle (Ctrl+T)",
+                "copy_coordinates": "Copiar Coordenadas",
+                "copy_length": "Copiar Comprimento",
+                "apply_style_to_all": "Aplicar Estilo a Tudo",
+                "select_label_color": "Selecionar Cor da Etiqueta",
+                "delete": "Excluir",
+                "alpha": "Alfa",
+            },
+            "ru": {
+                # Window titles
+                "window_title": "Просмотрщик Медицинских Изображений",
+                "about_title": "О Просмотрщике Медицинских Изображений",
+                
+                # Menu items
+                "menu_file": "Файл",
+                "menu_view": "Просмотр",
+                "menu_help": "Справка",
+                "load_image": "Загрузить Изображение...",
+                "load_labels": "Загрузить Метки...",
+                "save": "Сохранить",
+                "save_image": "Только Изображение...",
+                "save_label": "Только Метка...",
+                "save_overlay": "Наложенное Изображение...",
+                "save_screenshot": "Сохранить Скриншот...",
+                "reset": "Сброс",
+                "exit": "Выход",
+                "fit_all_views": "Подогнать Все Виды",
+                "toggle_control_panel": "Переключить Панель Управления",
+                "about": "О программе...",
+                "language": "Язык",
+                
+                # Status messages
+                "status_ready": "Готов - Загрузите изображение для начала",
+                "status_loading_image": "Загрузка изображения...",
+                "status_loading_labels": "Загрузка меток...",
+                "status_loading_image_path": "Загрузка изображения по пути...",
+                "status_loading_labels_path": "Загрузка меток по пути...",
+                "status_load_failed": "Ошибка загрузки",
+                "position": "Позиция:",
+                
+                # Control panel
+                "controls": "Управление",
+                "load_image_btn": "Загрузить Изображение (Ctrl+O)",
+                "load_labels_btn": "Загрузить Метки (Ctrl+L)",
+                "reset_btn": "Сброс (Ctrl+R)",
+                "image_path": "Путь к Изображению:",
+                "update_image": "Обновить Изображение",
+                "label_path": "Путь к Меткам:",
+                "update_labels": "Обновить Метки",
+                "overlay_settings": "Настройки Наложения",
+                "show_overlay": "Показать Наложение",
+                "alpha": "Альфа:",
+                "label_colors": "Цвета Меток",
+                "no_labels_found": "Метки не найдены",
+                "no_labels_loaded": "Метки не загружены",
+                "label_prefix": "Метка",
+                
+                # View titles
+                "axial_view": "Аксиальный (XY)",
+                "sagittal_view": "Сагиттальный (YZ)",
+                "coronal_view": "Коронарный (XZ)",
+                
+                # About dialog
+                "close": "Закрыть",
+                
+                # About dialog content
+                "other_languages": "Другие Языки",
+                "select_language": "Выберите язык:",
+                "about_what_is": "Что такое этот Просмотрщик?",
+                "about_description": "Простой и быстрый просмотрщик медицинских изображений. Просматривайте МРТ-сканы, наложения и маски сегментации в трех ракурсах одновременно.",
+                "about_how_to_use": "Как Использовать",
+                "about_load_files": "<b>Загрузка Файлов:</b> Используйте меню Файл → Загрузить Изображение/Метки, или введите пути в правой панели",
+                "about_navigate": "<b>Навигация:</b> Колесо мыши прокручивает срезы, Ctrl+колесо увеличивает/уменьшает",
+                "about_pan_rotate": "<b>Панорамирование и Поворот:</b> Правый клик и перетаскивание для перемещения вида, клик по кнопкам поворота для переворота",
+                "about_overlays": "<b>Наложения:</b> Отметьте \"Показать Наложение\" и настройте ползунок прозрачности",
+                "about_save": "<b>Сохранить:</b> Файл → Сохранить Скриншот (Ctrl+S) или Том (Ctrl+Shift+S)",
+                "about_shortcuts": "Горячие Клавиши",
+                "about_open_image": "Открыть файл изображения",
+                "about_open_labels": "Открыть файл меток",
+                "about_save_screenshot": "Сохранить скриншот",
+                "about_save_volume": "Открыть меню сохранения тома",
+                "about_reset": "Сбросить виды и очистить кеш",
+                "about_toggle_panel": "Переключить панель управления",
+                "about_fit_views": "Подогнать все виды к окну",
+                "about_show_dialog": "Показать этот диалог",
+                "about_scroll_slices": "Прокручивать срезы",
+                "about_zoom": "Увеличить/Уменьшить",
+                "about_pan_view": "Панорамирование вида",
+                "about_command_line": "Опции Командной Строки",
+                "about_command_help": "Запустите <code>python nifti_viewer.py --help</code> для полных опций.<br>Примеры: <code>-i image.mha -l labels.nii.gz</code>",
+                "about_file_support": "Поддержка Файлов",
+                "about_file_formats": "Поддерживает форматы NIfTI (.nii, .nii.gz) и MetaImage (.mha, .mhd).",
+                "english": "English",
+                "chinese": "中文",
+                "french": "Français",
+                "german": "Deutsch",
+                "japanese": "日本語",
+                "korean": "한국어",
+                "spanish": "Español",
+                "traditional_chinese": "繁體中文",
+                "italian": "Italiano",
+                "portuguese": "Português",
+                "russian": "Русский",
+                
+                # Control panel groups
+                "file_operations": "Операции с Файлами",
+                "view_controls": "Управление Просмотром",
+                "overlay_controls": "Управление Наложением",
+                "measurement_tools": "Инструменты Измерения",
+                "measurement_settings": "Настройки Измерения",
+                
+                # Control panel elements
+                "no_image_loaded": "Изображение не загружено...",
+                "no_labels_loaded_placeholder": "Метки не загружены...",
+                "slice": "Срез:",
+                "rotate_90": "Поворот на 90°",
+                "reset_to_defaults": "Сброс к Умолчанию",
+                "alpha_label": "Альфа: 0.50",
+                
+                # View names
+                "axial": "Аксиальный",
+                "sagittal": "Сагиттальный",
+                "coronal": "Коронарный",
+                
+                # Measurement tools
+                "line_tool": "Инструмент Линия",
+                "eraser": "Ластик",
+                "export_csv": "Экспорт CSV",
+                "measurements": "Измерения:",
+                "select_all": "Выбрать Все",
+                "deselect_all": "Снять Выбор",
+                "line_width": "Толщина Линии:",
+                "line_color": "Цвет Линии:",
+                "text_color": "Цвет Текста:",
+                "font_size": "Размер Шрифта:",
+                "font_weight": "Жирность Шрифта:",
+                "auto_snap": "Автоприлипание:",
+                "enable_endpoint_snapping": "Включить прилипание концов",
+                "snap_distance": "Расстояние Прилипания:",
+                "apply_to_selected": "Применить к Выбранным",
+                "apply_to_all": "Применить ко Всем",
+                "normal": "Обычный",
+                "bold": "Жирный",
+                
+                # Tooltips and context menus
+                "toggle_control_panel_tooltip": "Скрыть Панель Управления (Ctrl+T)",
+                "copy_coordinates": "Копировать Координаты",
+                "copy_length": "Копировать Длину",
+                "apply_style_to_all": "Применить Стиль ко Всем",
+                "select_label_color": "Выбрать Цвет Метки",
+                "delete": "Удалить",
+                "alpha": "Альфа",
+            }
+        }
+    
+    def set_language(self, language_code: str) -> None:
+        """Set the current language."""
+        if language_code in self.translations:
+            self.current_language = language_code
+    
+    def get_language(self) -> str:
+        """Get the current language code."""
+        return self.current_language
+    
+    def get_text(self, key: str) -> str:
+        """Get translated text for the given key."""
+        return self.translations.get(self.current_language, {}).get(key, key)
+    
+    def get_available_languages(self) -> list:
+        """Get list of available language codes."""
+        return list(self.translations.keys())
+
+
+# Global translation manager instance
+_translation_manager = TranslationManager()
+
+
+def tr(key: str) -> str:
+    """Translate text using the global translation manager."""
+    return _translation_manager.get_text(key)
+
+
+def set_language(language_code: str) -> None:
+    """Set the global application language."""
+    _translation_manager.set_language(language_code)
+
+
+def get_current_language() -> str:
+    """Get the current application language."""
+    return _translation_manager.get_language()
+
 
 # ============================================================================
 # UTILITY WIDGETS
@@ -125,7 +1770,7 @@ class ColorButton(QPushButton):
     def open_color_picker(self):
         """Open color picker dialog."""
         dialog = QColorDialog(self._color, self)
-        dialog.setWindowTitle("Select Label Color")
+        dialog.setWindowTitle(tr("select_label_color"))
 
         if dialog.exec() == QColorDialog.Accepted:
             new_color = dialog.currentColor()
@@ -1266,12 +2911,13 @@ class PreloadWorker(QRunnable):
 
 class AboutDialog(QDialog):
     """
-    About dialog with bilingual (English/Chinese) support and software information.
+    About dialog with multilingual support (11 languages) and software information.
+    Includes dedicated tabs for English/Chinese/French plus selectable other languages.
     """
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("About Medical Image Viewer")
+        self.setWindowTitle(tr("about_title"))
         self.setFixedSize(600, 500)
         self.setModal(True)
 
@@ -1285,9 +2931,11 @@ class AboutDialog(QDialog):
         # Create tabs
         self.create_english_tab()
         self.create_chinese_tab()
+        self.create_french_tab()
+        self.create_other_languages_tab()
 
         # Close button
-        close_btn = QPushButton("Close / 关闭")
+        close_btn = QPushButton(tr("close"))
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
 
@@ -1347,7 +2995,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
 
         # Version info
-        version_label = QLabel("Version 0.1.4")
+        version_label = QLabel("Version 0.1.5")
         version_label.setStyleSheet(
             "font-size: 14px; color: #ccc; margin-bottom: 15px;"
         )
@@ -1399,7 +3047,7 @@ class AboutDialog(QDialog):
         layout.addWidget(description)
 
         scroll_area.setWidget(content_widget)
-        self.tab_widget.addTab(scroll_area, "English")
+        self.tab_widget.addTab(scroll_area, tr("english"))
 
     def create_chinese_tab(self) -> None:
         """Create Chinese content tab."""
@@ -1419,7 +3067,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
 
         # Version info
-        version_label = QLabel("版本 0.1.4")
+        version_label = QLabel("版本 0.1.5")
         version_label.setStyleSheet(
             "font-size: 14px; color: #ccc; margin-bottom: 15px;"
         )
@@ -1471,7 +3119,232 @@ class AboutDialog(QDialog):
         layout.addWidget(description)
 
         scroll_area.setWidget(content_widget)
-        self.tab_widget.addTab(scroll_area, "中文")
+        self.tab_widget.addTab(scroll_area, tr("chinese"))
+
+    def create_french_tab(self) -> None:
+        """Create French content tab."""
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
+
+        # Main title
+        title_label = QLabel("Visionneuse d'Images Médicales")
+        title_label.setStyleSheet(
+            "font-size: 18px; font-weight: bold; color: #4a90e2; margin-bottom: 10px;"
+        )
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+
+        # Version info
+        version_label = QLabel("Version 0.1.5")
+        version_label.setStyleSheet(
+            "font-size: 14px; color: #ccc; margin-bottom: 15px;"
+        )
+        version_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(version_label)
+
+        # Description
+        description = QTextEdit()
+        description.setReadOnly(True)
+        description.setMaximumHeight(300)
+        description.setHtml(
+            """
+        <h3 style="color: #4a90e2;">Qu'est-ce que cette Visionneuse ?</h3>
+        <p>Une visionneuse simple et rapide pour les images médicales. Visualisez les examens IRM, 
+        les superpositions et les masques de segmentation dans trois perspectives simultanément.</p>
+        
+        <h3 style="color: #4a90e2;">Comment l'Utiliser</h3>
+        <ul>
+            <li><b>Charger des Fichiers :</b> Utilisez le menu Fichier → Charger Image/Étiquettes, ou tapez les chemins dans le panneau de droite</li>
+            <li><b>Naviguer :</b> La molette de la souris fait défiler les coupes, Ctrl+molette zoome</li>
+            <li><b>Panoramique et Rotation :</b> Clic droit et glisser pour déplacer la vue, cliquez sur les boutons de rotation pour retourner</li>
+            <li><b>Superpositions :</b> Cochez "Afficher la Superposition" et ajustez le curseur de transparence</li>
+            <li><b>Enregistrer :</b> Fichier → Enregistrer Capture d'Écran (Ctrl+S) ou Volume (Ctrl+Shift+S)</li>
+        </ul>
+        
+        <h3 style="color: #4a90e2;">Raccourcis Clavier</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr><td style="padding: 4px;"><b>Ctrl+O</b></td><td style="padding: 4px;">Ouvrir un fichier image</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+L</b></td><td style="padding: 4px;">Ouvrir un fichier d'étiquettes</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+S</b></td><td style="padding: 4px;">Enregistrer capture d'écran</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+Shift+S</b></td><td style="padding: 4px;">Ouvrir le menu d'enregistrement de volume</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+R</b></td><td style="padding: 4px;">Réinitialiser les vues et vider le cache</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+T</b></td><td style="padding: 4px;">Basculer le panneau de contrôle</td></tr>
+            <tr><td style="padding: 4px;"><b>F</b></td><td style="padding: 4px;">Ajuster toutes les vues à la fenêtre</td></tr>
+            <tr><td style="padding: 4px;"><b>F1</b></td><td style="padding: 4px;">Afficher cette boîte de dialogue</td></tr>
+            <tr><td style="padding: 4px;"><b>Molette</b></td><td style="padding: 4px;">Faire défiler les coupes</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+Molette</b></td><td style="padding: 4px;">Zoomer/Dézoomer</td></tr>
+            <tr><td style="padding: 4px;"><b>Clic droit-glisser</b></td><td style="padding: 4px;">Panoramique de la vue</td></tr>
+        </table>
+        
+        <h3 style="color: #4a90e2;">Options de Ligne de Commande</h3>
+        <p>Exécutez <code>python nifti_viewer.py --help</code> pour les options complètes.<br>
+        Exemples : <code>-i image.mha -l labels.nii.gz</code></p>
+        
+        <h3 style="color: #4a90e2;">Support de Fichiers</h3>
+        <p>Supporte les formats NIfTI (.nii, .nii.gz) et MetaImage (.mha, .mhd).</p>
+        """
+        )
+        layout.addWidget(description)
+
+        scroll_area.setWidget(content_widget)
+        self.tab_widget.addTab(scroll_area, tr("french"))
+
+    def create_other_languages_tab(self) -> None:
+        """Create Other Languages tab with language selector."""
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
+
+        # Language selector
+        selector_layout = QHBoxLayout()
+        selector_label = QLabel(tr("select_language"))
+        selector_label.setStyleSheet("font-size: 14px; color: #ccc; margin: 10px 0;")
+        
+        self.language_combo = QComboBox()
+        self.language_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #4a4a4a;
+                color: white;
+                border: 1px solid #555;
+                padding: 5px;
+                font-size: 12px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid white;
+                margin-right: 5px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #4a4a4a;
+                color: white;
+                selection-background-color: #4a90e2;
+            }
+        """)
+        
+        # Add other language options (excluding en, zh, fr which have dedicated tabs)
+        other_languages = [
+            ("de", tr("german")),
+            ("ja", tr("japanese")), 
+            ("ko", tr("korean")),
+            ("es", tr("spanish")),
+            ("zh-TW", tr("traditional_chinese")),
+            ("it", tr("italian")),
+            ("pt", tr("portuguese")),
+            ("ru", tr("russian"))
+        ]
+        
+        for code, name in other_languages:
+            self.language_combo.addItem(name, code)
+        
+        self.language_combo.currentTextChanged.connect(self.update_other_language_content)
+        
+        selector_layout.addWidget(selector_label)
+        selector_layout.addWidget(self.language_combo)
+        selector_layout.addStretch()
+        layout.addLayout(selector_layout)
+
+        # Content area
+        self.other_content_widget = QWidget()
+        self.other_content_layout = QVBoxLayout(self.other_content_widget)
+        layout.addWidget(self.other_content_widget)
+
+        # Initialize with first language
+        self.update_other_language_content()
+
+        scroll_area.setWidget(content_widget)
+        self.tab_widget.addTab(scroll_area, tr("other_languages"))
+
+    def update_other_language_content(self) -> None:
+        """Update the content based on selected language."""
+        # Clear existing content
+        while self.other_content_layout.count():
+            child = self.other_content_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        # Get selected language
+        current_data = self.language_combo.currentData()
+        if not current_data:
+            return
+            
+        # Store current language and temporarily switch to selected language
+        original_language = get_current_language()
+        set_language(current_data)
+
+        # Main title
+        title_label = QLabel(tr("window_title"))
+        title_label.setStyleSheet(
+            "font-size: 18px; font-weight: bold; color: #4a90e2; margin-bottom: 10px;"
+        )
+        title_label.setAlignment(Qt.AlignCenter)
+        self.other_content_layout.addWidget(title_label)
+
+        # Version info
+        version_label = QLabel("Version 0.1.5")
+        version_label.setStyleSheet(
+            "font-size: 14px; color: #ccc; margin-bottom: 15px;"
+        )
+        version_label.setAlignment(Qt.AlignCenter)
+        self.other_content_layout.addWidget(version_label)
+
+        # Description
+        description = QTextEdit()
+        description.setReadOnly(True)
+        description.setMaximumHeight(300)
+        
+        # Build HTML content using translations
+        html_content = f"""
+        <h3 style="color: #4a90e2;">{tr("about_what_is")}</h3>
+        <p>{tr("about_description")}</p>
+        
+        <h3 style="color: #4a90e2;">{tr("about_how_to_use")}</h3>
+        <ul>
+            <li>{tr("about_load_files")}</li>
+            <li>{tr("about_navigate")}</li>
+            <li>{tr("about_pan_rotate")}</li>
+            <li>{tr("about_overlays")}</li>
+            <li>{tr("about_save")}</li>
+        </ul>
+        
+        <h3 style="color: #4a90e2;">{tr("about_shortcuts")}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tr><td style="padding: 4px;"><b>Ctrl+O</b></td><td style="padding: 4px;">{tr("about_open_image")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+L</b></td><td style="padding: 4px;">{tr("about_open_labels")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+S</b></td><td style="padding: 4px;">{tr("about_save_screenshot")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+Shift+S</b></td><td style="padding: 4px;">{tr("about_save_volume")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+R</b></td><td style="padding: 4px;">{tr("about_reset")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+T</b></td><td style="padding: 4px;">{tr("about_toggle_panel")}</td></tr>
+            <tr><td style="padding: 4px;"><b>F</b></td><td style="padding: 4px;">{tr("about_fit_views")}</td></tr>
+            <tr><td style="padding: 4px;"><b>F1</b></td><td style="padding: 4px;">{tr("about_show_dialog")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Wheel</b></td><td style="padding: 4px;">{tr("about_scroll_slices")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+Wheel</b></td><td style="padding: 4px;">{tr("about_zoom")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Right-drag</b></td><td style="padding: 4px;">{tr("about_pan_view")}</td></tr>
+        </table>
+        
+        <h3 style="color: #4a90e2;">{tr("about_command_line")}</h3>
+        <p>{tr("about_command_help")}</p>
+        
+        <h3 style="color: #4a90e2;">{tr("about_file_support")}</h3>
+        <p>{tr("about_file_formats")}</p>
+        """
+        
+        description.setHtml(html_content)
+        self.other_content_layout.addWidget(description)
+
+        # Restore original language
+        set_language(original_language)
 
 
 class SliceView(QGraphicsView):
@@ -2014,7 +3887,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.controller = controller
 
-        self.setWindowTitle("Medical Image Viewer")
+        self.setWindowTitle(tr("window_title"))
         self.setWindowIcon(QIcon("media/logo.png"))
         self.setMinimumSize(1200, 800)
         self.resize(1400, 900)  # Set a good default size
@@ -2024,6 +3897,176 @@ class MainWindow(QMainWindow):
         self.setup_toolbar()
         self.setup_menu()
         self.setup_statusbar()
+    
+    def update_ui_text(self):
+        """Update all UI text with current language translations."""
+        self.setWindowTitle(tr("window_title"))
+        
+        # Update menu text unconditionally using stored references
+        if hasattr(self, 'menus'):
+            self.menus["file"].setTitle(tr("menu_file"))
+            self.menus["view"].setTitle(tr("menu_view"))
+            self.menus["help"].setTitle(tr("menu_help"))
+            self.menus["language"].setTitle(tr("language"))
+        
+        # Update actions
+        if hasattr(self, 'actions'):
+            self.actions["load_image"].setText(tr("load_image"))
+            self.actions["load_labels"].setText(tr("load_labels"))
+            self.actions["save_image"].setText(tr("save_image"))
+            self.actions["save_label"].setText(tr("save_label"))
+            self.actions["save_overlay"].setText(tr("save_overlay"))
+            self.actions["save_screenshot"].setText(tr("save_screenshot"))
+            self.actions["reset"].setText(tr("reset"))
+            self.actions["exit"].setText(tr("exit"))
+            self.actions["fit_all"].setText(tr("fit_all_views"))
+            self.actions["toggle_control_panel"].setText(tr("toggle_control_panel"))
+            self.actions["about"].setText(tr("about"))
+        
+        # Update control dock
+        if hasattr(self, 'control_dock'):
+            self.control_dock.setWindowTitle(tr("controls"))
+        
+        # Update control buttons
+        if hasattr(self, 'load_image_btn'):
+            self.load_image_btn.setText(tr("load_image_btn"))
+        if hasattr(self, 'load_labels_btn'):
+            self.load_labels_btn.setText(tr("load_labels_btn"))
+        if hasattr(self, 'reset_btn'):
+            self.reset_btn.setText(tr("reset_btn"))
+        if hasattr(self, 'update_image_btn'):
+            self.update_image_btn.setText(tr("update_image"))
+        if hasattr(self, 'update_labels_btn'):
+            self.update_labels_btn.setText(tr("update_labels"))
+        
+        # Update status bar unconditionally
+        if hasattr(self, 'status_label'):
+            self.status_label.setText(tr("status_ready"))
+        
+        # Update view titles
+        view_titles = [tr("axial_view"), tr("sagittal_view"), tr("coronal_view")]
+        view_names = ["axial", "sagittal", "coronal"]
+        
+        if hasattr(self, 'slice_views'):
+            for i, name in enumerate(view_names):
+                # Find the title label for this view
+                view_widget = self.slice_views[name].parent()
+                if view_widget:
+                    layout = view_widget.layout()
+                    if layout and layout.count() > 0:
+                        title_widget = layout.itemAt(0).widget()
+                        if isinstance(title_widget, QLabel):
+                            title_widget.setText(view_titles[i])
+        
+        # Update control panel elements
+        if hasattr(self, 'image_path_input'):
+            self.image_path_input.setPlaceholderText(tr("no_image_loaded"))
+        if hasattr(self, 'label_path_input'):
+            self.label_path_input.setPlaceholderText(tr("no_labels_loaded_placeholder"))
+        if hasattr(self, 'image_path_label'):
+            self.image_path_label.setText(tr("image_path"))
+        if hasattr(self, 'label_path_label'):
+            self.label_path_label.setText(tr("label_path"))
+            
+        # Update checkboxes
+        if hasattr(self, 'view_checkboxes'):
+            for name, checkbox in self.view_checkboxes.items():
+                checkbox.setText(tr(name))
+        if hasattr(self, 'global_overlay_cb'):
+            self.global_overlay_cb.setText(tr("show_overlay"))
+        if hasattr(self, 'snap_enabled_checkbox'):
+            self.snap_enabled_checkbox.setText(tr("enable_endpoint_snapping"))
+            
+        # Update buttons
+        if hasattr(self, 'reset_colors_btn'):
+            self.reset_colors_btn.setText(tr("reset_to_defaults"))
+        if hasattr(self, 'line_tool_btn'):
+            self.line_tool_btn.setText(tr("line_tool"))
+        if hasattr(self, 'eraser_tool_btn'):
+            self.eraser_tool_btn.setText(tr("eraser"))
+        if hasattr(self, 'export_measurements_btn'):
+            self.export_measurements_btn.setText(tr("export_csv"))
+        if hasattr(self, 'select_all_btn'):
+            self.select_all_btn.setText(tr("select_all"))
+        if hasattr(self, 'deselect_all_btn'):
+            self.deselect_all_btn.setText(tr("deselect_all"))
+        if hasattr(self, 'apply_to_selected_btn'):
+            self.apply_to_selected_btn.setText(tr("apply_to_selected"))
+        if hasattr(self, 'apply_to_all_btn'):
+            self.apply_to_all_btn.setText(tr("apply_to_all"))
+            
+        # Update rotate buttons in slice controls
+        if hasattr(self, 'slice_controls'):
+            for name, controls in self.slice_controls.items():
+                if 'rotate_btn' in controls:
+                    controls['rotate_btn'].setText(tr("rotate_90"))
+                if 'slice_label' in controls:
+                    controls['slice_label'].setText(tr("slice"))
+                    
+        # Update measurement settings labels
+        if hasattr(self, 'measurements_label'):
+            self.measurements_label.setText(tr("measurements"))
+        if hasattr(self, 'line_width_label'):
+            self.line_width_label.setText(tr("line_width"))
+        if hasattr(self, 'line_color_label'):
+            self.line_color_label.setText(tr("line_color"))
+        if hasattr(self, 'text_color_label'):
+            self.text_color_label.setText(tr("text_color"))
+        if hasattr(self, 'font_size_label'):
+            self.font_size_label.setText(tr("font_size"))
+        if hasattr(self, 'font_weight_label'):
+            self.font_weight_label.setText(tr("font_weight"))
+        if hasattr(self, 'auto_snap_label'):
+            self.auto_snap_label.setText(tr("auto_snap"))
+        if hasattr(self, 'snap_distance_label'):
+            self.snap_distance_label.setText(tr("snap_distance"))
+                    
+        # Update alpha label with correct key
+        if hasattr(self, 'alpha_label'):
+            current_alpha = self.alpha_slider.value() / 100.0 if hasattr(self, 'alpha_slider') else 0.50
+            alpha_text = tr("alpha") + f": {current_alpha:.2f}"
+            self.alpha_label.setText(alpha_text)
+            
+        # Update font weight combo
+        if hasattr(self, 'font_weight_combo'):
+            current_data = [self.font_weight_combo.itemData(i) for i in range(self.font_weight_combo.count())]
+            current_index = self.font_weight_combo.currentIndex()
+            self.font_weight_combo.clear()
+            self.font_weight_combo.addItem(tr("normal"), QFont.Normal)
+            self.font_weight_combo.addItem(tr("bold"), QFont.Bold)
+            if current_index < len(current_data):
+                self.font_weight_combo.setCurrentIndex(current_index)
+                
+        # Update group box titles
+        if hasattr(self, 'file_group'):
+            self.file_group.setTitle(tr("file_operations"))
+        if hasattr(self, 'view_group'):
+            self.view_group.setTitle(tr("view_controls"))
+        if hasattr(self, 'overlay_group'):
+            self.overlay_group.setTitle(tr("overlay_controls"))
+        if hasattr(self, 'label_colors_group'):
+            self.label_colors_group.setTitle(tr("label_colors"))
+        if hasattr(self, 'measure_group'):
+            self.measure_group.setTitle(tr("measurement_tools"))
+        if hasattr(self, 'settings_group'):
+            self.settings_group.setTitle(tr("measurement_settings"))
+        if hasattr(self, 'slice_groups'):
+            for name, group in self.slice_groups.items():
+                group.setTitle(f"{tr(name)} {tr('slice')}")
+                
+        # Update language action text
+        if hasattr(self, 'language_actions'):
+            self.language_actions["en"].setText(tr("english"))
+            self.language_actions["zh"].setText(tr("chinese"))
+            self.language_actions["fr"].setText(tr("french"))
+            self.language_actions["de"].setText(tr("german"))
+            self.language_actions["ja"].setText(tr("japanese"))
+            self.language_actions["ko"].setText(tr("korean"))
+            self.language_actions["es"].setText(tr("spanish"))
+            self.language_actions["zh-TW"].setText(tr("traditional_chinese"))
+            self.language_actions["it"].setText(tr("italian"))
+            self.language_actions["pt"].setText(tr("portuguese"))
+            self.language_actions["ru"].setText(tr("russian"))
 
     def setup_ui(self) -> None:
         """Create main UI layout."""
@@ -2040,7 +4083,7 @@ class MainWindow(QMainWindow):
         # Create three slice views
         self.slice_views = {}
         view_names = ["axial", "sagittal", "coronal"]
-        view_titles = ["Axial (XY)", "Sagittal (YZ)", "Coronal (XZ)"]
+        view_titles = [tr("axial_view"), tr("sagittal_view"), tr("coronal_view")]
 
         for name, title in zip(view_names, view_titles):
             # View container
@@ -2069,7 +4112,7 @@ class MainWindow(QMainWindow):
 
     def setup_control_dock(self) -> None:
         """Create docked control panel with collapsible sections."""
-        self.control_dock = QDockWidget("Controls", self)
+        self.control_dock = QDockWidget(tr("controls"), self)
         self.control_dock.setAllowedAreas(
             Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea
         )
@@ -2100,25 +4143,28 @@ class MainWindow(QMainWindow):
 
         # File controls
         file_layout = QVBoxLayout()
-        self.load_image_btn = QPushButton("Load Image (Ctrl+O)")
-        self.load_labels_btn = QPushButton("Load Labels (Ctrl+L)")
-        self.reset_btn = QPushButton("Reset (Ctrl+R)")
+        self.load_image_btn = QPushButton(tr("load_image_btn"))
+        self.load_labels_btn = QPushButton(tr("load_labels_btn"))
+        self.reset_btn = QPushButton(tr("reset_btn"))
         file_layout.addWidget(self.load_image_btn)
         file_layout.addWidget(self.load_labels_btn)
         file_layout.addWidget(self.reset_btn)
-        file_layout.addWidget(QLabel("Image Path:"))
+        self.image_path_label = QLabel(tr("image_path"))
+        file_layout.addWidget(self.image_path_label)
         self.image_path_input = QLineEdit()
-        self.image_path_input.setPlaceholderText("No image loaded...")
+        self.image_path_input.setPlaceholderText(tr("no_image_loaded"))
         file_layout.addWidget(self.image_path_input)
-        self.update_image_btn = QPushButton("Update Image")
+        self.update_image_btn = QPushButton(tr("update_image"))
         file_layout.addWidget(self.update_image_btn)
-        file_layout.addWidget(QLabel("Label Path:"))
+        self.label_path_label = QLabel(tr("label_path"))
+        file_layout.addWidget(self.label_path_label)
         self.label_path_input = QLineEdit()
-        self.label_path_input.setPlaceholderText("No labels loaded...")
+        self.label_path_input.setPlaceholderText(tr("no_labels_loaded_placeholder"))
         file_layout.addWidget(self.label_path_input)
-        self.update_labels_btn = QPushButton("Update Labels")
+        self.update_labels_btn = QPushButton(tr("update_labels"))
         file_layout.addWidget(self.update_labels_btn)
-        file_group = create_collapsible_group("File Operations", file_layout)
+        file_group = create_collapsible_group(tr("file_operations"), file_layout)
+        self.file_group = file_group  # Store reference for language updates
         dock_layout.addWidget(file_group)
 
         # View controls
@@ -2126,11 +4172,12 @@ class MainWindow(QMainWindow):
         self.view_checkboxes = {}
         view_names = ["axial", "sagittal", "coronal"]
         for i, name in enumerate(view_names):
-            checkbox = QCheckBox(name.title())
+            checkbox = QCheckBox(tr(name))
             checkbox.setChecked(True)
             self.view_checkboxes[name] = checkbox
             view_layout.addWidget(checkbox, 0, i)
-        view_group = create_collapsible_group("View Controls", view_layout)
+        view_group = create_collapsible_group(tr("view_controls"), view_layout)
+        self.view_group = view_group  # Store reference for language updates
         dock_layout.addWidget(view_group)
 
         # Slice controls
@@ -2145,8 +4192,9 @@ class MainWindow(QMainWindow):
             spinbox.setMinimum(0)
             spinbox.setMaximum(100)
             spinbox.setValue(50)
-            rotate_btn = QPushButton("Rotate 90°")
-            slice_layout.addWidget(QLabel("Slice:"))
+            rotate_btn = QPushButton(tr("rotate_90"))
+            slice_label = QLabel(tr("slice"))
+            slice_layout.addWidget(slice_label)
             slice_layout.addWidget(slider)
             slice_layout.addWidget(spinbox)
             slice_layout.addWidget(rotate_btn)
@@ -2154,17 +4202,22 @@ class MainWindow(QMainWindow):
                 "slider": slider,
                 "spinbox": spinbox,
                 "rotate_btn": rotate_btn,
+                "slice_label": slice_label,  # Store label reference
             }
             slice_group = create_collapsible_group(
-                f"{name.title()} Slice", slice_layout
+                f"{tr(name)} {tr('slice')}", slice_layout
             )
+            # Store references for language updates
+            if not hasattr(self, 'slice_groups'):
+                self.slice_groups = {}
+            self.slice_groups[name] = slice_group
             dock_layout.addWidget(slice_group)
 
         # Overlay controls
         overlay_layout = QVBoxLayout()
-        self.global_overlay_cb = QCheckBox("Show Overlay")
+        self.global_overlay_cb = QCheckBox(tr("show_overlay"))
         self.global_overlay_cb.setChecked(True)
-        self.alpha_label = QLabel("Alpha: 0.50")
+        self.alpha_label = QLabel(tr("alpha_label"))
         self.alpha_slider = QSlider(Qt.Horizontal)
         self.alpha_slider.setMinimum(0)
         self.alpha_slider.setMaximum(100)
@@ -2173,7 +4226,8 @@ class MainWindow(QMainWindow):
         overlay_layout.addWidget(self.alpha_label)
         overlay_layout.addWidget(self.alpha_slider)
         overlay_group = create_collapsible_group(
-            "Overlay Controls", overlay_layout)
+            tr("overlay_controls"), overlay_layout)
+        self.overlay_group = overlay_group  # Store reference for language updates
         dock_layout.addWidget(overlay_group)
 
         # Label Colors controls
@@ -2197,7 +4251,7 @@ class MainWindow(QMainWindow):
         self.label_colors_scroll.setWidget(self.label_colors_widget)
 
         # Add initial empty label inside the scroll area
-        empty_label = QLabel("No labels loaded")
+        empty_label = QLabel(tr("no_labels_loaded"))
         empty_label.setAlignment(Qt.AlignCenter)
         empty_label.setStyleSheet("color: #666; font-style: italic;")
         self.label_colors_content_layout.addWidget(empty_label)
@@ -2205,12 +4259,12 @@ class MainWindow(QMainWindow):
         self.label_colors_layout.addWidget(self.label_colors_scroll)
 
         # Reset colors button
-        self.reset_colors_btn = QPushButton("Reset to Defaults")
+        self.reset_colors_btn = QPushButton(tr("reset_to_defaults"))
         self.reset_colors_btn.setEnabled(False)
         self.label_colors_layout.addWidget(self.reset_colors_btn)
 
         self.label_colors_group = create_collapsible_group(
-            "Label Colors", self.label_colors_layout
+            tr("label_colors"), self.label_colors_layout
         )
         self.label_colors_group.setChecked(False)  # Start collapsed
         dock_layout.addWidget(self.label_colors_group)
@@ -2220,15 +4274,15 @@ class MainWindow(QMainWindow):
 
         # Tool buttons in horizontal layout
         tool_buttons_layout = QHBoxLayout()
-        self.line_tool_btn = QPushButton("Line Tool")
+        self.line_tool_btn = QPushButton(tr("line_tool"))
         self.line_tool_btn.setCheckable(True)
-        self.eraser_tool_btn = QPushButton("Eraser")
+        self.eraser_tool_btn = QPushButton(tr("eraser"))
         self.eraser_tool_btn.setCheckable(True)
         tool_buttons_layout.addWidget(self.line_tool_btn)
         tool_buttons_layout.addWidget(self.eraser_tool_btn)
         measure_layout.addLayout(tool_buttons_layout)
 
-        self.export_measurements_btn = QPushButton("Export CSV")
+        self.export_measurements_btn = QPushButton(tr("export_csv"))
         measure_layout.addWidget(self.export_measurements_btn)
 
         # Measurement Settings with Enhanced UI
@@ -2236,7 +4290,8 @@ class MainWindow(QMainWindow):
 
         # Measurement list with checkboxes for batch operations
         list_container_layout = QVBoxLayout()
-        list_container_layout.addWidget(QLabel("Measurements:"))
+        self.measurements_label = QLabel(tr("measurements"))
+        list_container_layout.addWidget(self.measurements_label)
         self.measurements_list = QListWidget()
         self.measurements_list.setSelectionMode(QListWidget.MultiSelection)
         self.measurements_list.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -2244,9 +4299,9 @@ class MainWindow(QMainWindow):
 
         # Batch operation buttons
         batch_buttons_layout = QHBoxLayout()
-        self.select_all_btn = QPushButton("Select All")
+        self.select_all_btn = QPushButton(tr("select_all"))
         self.select_all_btn.setMaximumWidth(80)
-        self.deselect_all_btn = QPushButton("Deselect All")
+        self.deselect_all_btn = QPushButton(tr("deselect_all"))
         self.deselect_all_btn.setMaximumWidth(90)
         batch_buttons_layout.addWidget(self.select_all_btn)
         batch_buttons_layout.addWidget(self.deselect_all_btn)
@@ -2257,7 +4312,8 @@ class MainWindow(QMainWindow):
 
         # Style settings for selected measurements
         style_settings_layout = QGridLayout()
-        style_settings_layout.addWidget(QLabel("Line Width:"), 0, 0)
+        self.line_width_label = QLabel(tr("line_width"))
+        style_settings_layout.addWidget(self.line_width_label, 0, 0)
         self.line_width_spinbox = QDoubleSpinBox()
         self.line_width_spinbox.setRange(0.1, 10.0)  # 0.1 to 10.0 pixels
         self.line_width_spinbox.setValue(1.5)  # Default to 1.5 pixel (thinner)
@@ -2265,15 +4321,18 @@ class MainWindow(QMainWindow):
         self.line_width_spinbox.setDecimals(1)  # 1 decimal place
         style_settings_layout.addWidget(self.line_width_spinbox, 0, 1)
 
-        style_settings_layout.addWidget(QLabel("Line Color:"), 1, 0)
+        self.line_color_label = QLabel(tr("line_color"))
+        style_settings_layout.addWidget(self.line_color_label, 1, 0)
         self.line_color_btn = ColorButton(color=(255, 0, 0))  # Default red
         style_settings_layout.addWidget(self.line_color_btn, 1, 1)
 
-        style_settings_layout.addWidget(QLabel("Text Color:"), 2, 0)
+        self.text_color_label = QLabel(tr("text_color"))
+        style_settings_layout.addWidget(self.text_color_label, 2, 0)
         self.text_color_btn = ColorButton(color=(255, 0, 0))  # Default red
         style_settings_layout.addWidget(self.text_color_btn, 2, 1)
 
-        style_settings_layout.addWidget(QLabel("Font Size:"), 3, 0)
+        self.font_size_label = QLabel(tr("font_size"))
+        style_settings_layout.addWidget(self.font_size_label, 3, 0)
         self.font_size_spinbox = QDoubleSpinBox()
         self.font_size_spinbox.setRange(2.0, 24.0)  # 2.0 to 24.0 pt
         self.font_size_spinbox.setValue(5.0)  # Default to 5.0 pt (smaller)
@@ -2281,22 +4340,25 @@ class MainWindow(QMainWindow):
         self.font_size_spinbox.setDecimals(1)  # 1 decimal place
         style_settings_layout.addWidget(self.font_size_spinbox, 3, 1)
 
-        style_settings_layout.addWidget(QLabel("Font Weight:"), 4, 0)
+        self.font_weight_label = QLabel(tr("font_weight"))
+        style_settings_layout.addWidget(self.font_weight_label, 4, 0)
         self.font_weight_combo = QComboBox()
-        self.font_weight_combo.addItem("Normal", QFont.Normal)
-        self.font_weight_combo.addItem("Bold", QFont.Bold)
+        self.font_weight_combo.addItem(tr("normal"), QFont.Normal)
+        self.font_weight_combo.addItem(tr("bold"), QFont.Bold)
         style_settings_layout.addWidget(self.font_weight_combo, 4, 1)
 
         settings_layout.addLayout(style_settings_layout)
 
         # Auto-snap settings
         snap_settings_layout = QGridLayout()
-        snap_settings_layout.addWidget(QLabel("Auto-Snap:"), 0, 0)
-        self.snap_enabled_checkbox = QCheckBox("Enable endpoint snapping")
+        self.auto_snap_label = QLabel(tr("auto_snap"))
+        snap_settings_layout.addWidget(self.auto_snap_label, 0, 0)
+        self.snap_enabled_checkbox = QCheckBox(tr("enable_endpoint_snapping"))
         self.snap_enabled_checkbox.setChecked(True)  # Default enabled
         snap_settings_layout.addWidget(self.snap_enabled_checkbox, 0, 1)
 
-        snap_settings_layout.addWidget(QLabel("Snap Distance:"), 1, 0)
+        self.snap_distance_label = QLabel(tr("snap_distance"))
+        snap_settings_layout.addWidget(self.snap_distance_label, 1, 0)
         self.snap_distance_spinbox = QDoubleSpinBox()
         self.snap_distance_spinbox.setRange(
             3.0, 20.0)  # 3 to 20 pixels (smaller range)
@@ -2312,19 +4374,21 @@ class MainWindow(QMainWindow):
 
         # Apply buttons
         apply_buttons_layout = QHBoxLayout()
-        self.apply_to_selected_btn = QPushButton("Apply to Selected")
-        self.apply_to_all_btn = QPushButton("Apply to All")
+        self.apply_to_selected_btn = QPushButton(tr("apply_to_selected"))
+        self.apply_to_all_btn = QPushButton(tr("apply_to_all"))
         apply_buttons_layout.addWidget(self.apply_to_selected_btn)
         apply_buttons_layout.addWidget(self.apply_to_all_btn)
         settings_layout.addLayout(apply_buttons_layout)
 
         measure_group = create_collapsible_group(
-            "Measurement Tools", measure_layout)
+            tr("measurement_tools"), measure_layout)
+        self.measure_group = measure_group  # Store reference for language updates
         dock_layout.addWidget(measure_group)
 
         settings_group = create_collapsible_group(
-            "Measurement Settings", settings_layout
+            tr("measurement_settings"), settings_layout
         )
+        self.settings_group = settings_group  # Store reference for language updates
         # Start expanded to show the new features
         settings_group.setChecked(True)
         dock_layout.addWidget(settings_group)
@@ -2362,7 +4426,7 @@ class MainWindow(QMainWindow):
         # Control panel toggle button
         self.panel_toggle_btn = QPushButton("◀")
         self.panel_toggle_btn.setFixedSize(24, 24)
-        self.panel_toggle_btn.setToolTip("Hide Control Panel (Ctrl+T)")
+        self.panel_toggle_btn.setToolTip(tr("toggle_control_panel_tooltip"))
         self.panel_toggle_btn.setStyleSheet(
             """
             QPushButton {
@@ -2391,20 +4455,20 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
 
         # File menu
-        file_menu = menubar.addMenu("File")
+        file_menu = menubar.addMenu(tr("menu_file"))
 
-        load_image_action = QAction("Load Image...", self)
+        load_image_action = QAction(tr("load_image"), self)
         load_image_action.setShortcut("Ctrl+O")
         file_menu.addAction(load_image_action)
 
-        load_labels_action = QAction("Load Labels...", self)
+        load_labels_action = QAction(tr("load_labels"), self)
         load_labels_action.setShortcut("Ctrl+L")
         file_menu.addAction(load_labels_action)
 
-        save_submenu = file_menu.addMenu("Save")
-        save_image_action = QAction("Image Only...", self)
-        save_label_action = QAction("Label Only...", self)
-        save_overlay_action = QAction("Overlay Image...", self)
+        save_submenu = file_menu.addMenu(tr("save"))
+        save_image_action = QAction(tr("save_image"), self)
+        save_label_action = QAction(tr("save_label"), self)
+        save_overlay_action = QAction(tr("save_overlay"), self)
         save_submenu.addAction(save_image_action)
         save_submenu.addAction(save_label_action)
         save_submenu.addAction(save_overlay_action)
@@ -2416,41 +4480,139 @@ class MainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
-        save_screenshot_action = QAction("Save Screenshot...", self)
+        save_screenshot_action = QAction(tr("save_screenshot"), self)
         save_screenshot_action.setShortcut("Ctrl+S")
         file_menu.addAction(save_screenshot_action)
 
         file_menu.addSeparator()
 
-        reset_action = QAction("Reset", self)
+        reset_action = QAction(tr("reset"), self)
         reset_action.setShortcut("Ctrl+R")
         file_menu.addAction(reset_action)
 
         file_menu.addSeparator()
 
-        exit_action = QAction("Exit", self)
+        exit_action = QAction(tr("exit"), self)
         exit_action.setShortcut("Ctrl+Q")
         file_menu.addAction(exit_action)
 
         # View menu
-        view_menu = menubar.addMenu("View")
+        view_menu = menubar.addMenu(tr("menu_view"))
 
-        fit_all_action = QAction("Fit All Views", self)
+        fit_all_action = QAction(tr("fit_all_views"), self)
         fit_all_action.setShortcut("F")
         view_menu.addAction(fit_all_action)
 
         view_menu.addSeparator()
 
-        toggle_control_panel_action = QAction("Toggle Control Panel", self)
+        toggle_control_panel_action = QAction(tr("toggle_control_panel"), self)
         toggle_control_panel_action.setShortcut("Ctrl+T")
         toggle_control_panel_action.setCheckable(True)
         toggle_control_panel_action.setChecked(True)
         view_menu.addAction(toggle_control_panel_action)
 
-        # Help menu
-        help_menu = menubar.addMenu("Help")
+        # Language menu
+        language_menu = menubar.addMenu(tr("language"))
+        
+        # Create language action group for exclusive selection
+        self.language_action_group = QActionGroup(self)
+        
+        english_action = QAction(tr("english"), self)
+        english_action.setCheckable(True)
+        english_action.setChecked(get_current_language() == "en")
+        english_action.triggered.connect(lambda: self.change_language("en"))
+        self.language_action_group.addAction(english_action)
+        language_menu.addAction(english_action)
+        
+        chinese_action = QAction(tr("chinese"), self)
+        chinese_action.setCheckable(True)
+        chinese_action.setChecked(get_current_language() == "zh")
+        chinese_action.triggered.connect(lambda: self.change_language("zh"))
+        self.language_action_group.addAction(chinese_action)
+        language_menu.addAction(chinese_action)
+        
+        french_action = QAction(tr("french"), self)
+        french_action.setCheckable(True)
+        french_action.setChecked(get_current_language() == "fr")
+        french_action.triggered.connect(lambda: self.change_language("fr"))
+        self.language_action_group.addAction(french_action)
+        language_menu.addAction(french_action)
+        
+        german_action = QAction(tr("german"), self)
+        german_action.setCheckable(True)
+        german_action.setChecked(get_current_language() == "de")
+        german_action.triggered.connect(lambda: self.change_language("de"))
+        self.language_action_group.addAction(german_action)
+        language_menu.addAction(german_action)
+        
+        japanese_action = QAction(tr("japanese"), self)
+        japanese_action.setCheckable(True)
+        japanese_action.setChecked(get_current_language() == "ja")
+        japanese_action.triggered.connect(lambda: self.change_language("ja"))
+        self.language_action_group.addAction(japanese_action)
+        language_menu.addAction(japanese_action)
+        
+        korean_action = QAction(tr("korean"), self)
+        korean_action.setCheckable(True)
+        korean_action.setChecked(get_current_language() == "ko")
+        korean_action.triggered.connect(lambda: self.change_language("ko"))
+        self.language_action_group.addAction(korean_action)
+        language_menu.addAction(korean_action)
+        
+        spanish_action = QAction(tr("spanish"), self)
+        spanish_action.setCheckable(True)
+        spanish_action.setChecked(get_current_language() == "es")
+        spanish_action.triggered.connect(lambda: self.change_language("es"))
+        self.language_action_group.addAction(spanish_action)
+        language_menu.addAction(spanish_action)
+        
+        traditional_chinese_action = QAction(tr("traditional_chinese"), self)
+        traditional_chinese_action.setCheckable(True)
+        traditional_chinese_action.setChecked(get_current_language() == "zh-TW")
+        traditional_chinese_action.triggered.connect(lambda: self.change_language("zh-TW"))
+        self.language_action_group.addAction(traditional_chinese_action)
+        language_menu.addAction(traditional_chinese_action)
+        
+        italian_action = QAction(tr("italian"), self)
+        italian_action.setCheckable(True)
+        italian_action.setChecked(get_current_language() == "it")
+        italian_action.triggered.connect(lambda: self.change_language("it"))
+        self.language_action_group.addAction(italian_action)
+        language_menu.addAction(italian_action)
+        
+        portuguese_action = QAction(tr("portuguese"), self)
+        portuguese_action.setCheckable(True)
+        portuguese_action.setChecked(get_current_language() == "pt")
+        portuguese_action.triggered.connect(lambda: self.change_language("pt"))
+        self.language_action_group.addAction(portuguese_action)
+        language_menu.addAction(portuguese_action)
+        
+        russian_action = QAction(tr("russian"), self)
+        russian_action.setCheckable(True)
+        russian_action.setChecked(get_current_language() == "ru")
+        russian_action.triggered.connect(lambda: self.change_language("ru"))
+        self.language_action_group.addAction(russian_action)
+        language_menu.addAction(russian_action)
+        
+        # Store language actions for easy reference
+        self.language_actions = {
+            "en": english_action,
+            "zh": chinese_action,
+            "fr": french_action,
+            "de": german_action,
+            "ja": japanese_action,
+            "ko": korean_action,
+            "es": spanish_action,
+            "zh-TW": traditional_chinese_action,
+            "it": italian_action,
+            "pt": portuguese_action,
+            "ru": russian_action,
+        }
 
-        about_action = QAction("About...", self)
+        # Help menu
+        help_menu = menubar.addMenu(tr("menu_help"))
+
+        about_action = QAction(tr("about"), self)
         about_action.setShortcut("F1")
         help_menu.addAction(about_action)
 
@@ -2468,15 +4630,33 @@ class MainWindow(QMainWindow):
             "toggle_control_panel": toggle_control_panel_action,
             "about": about_action,
         }
+        
+        # Store menu references for easy translation updates
+        self.menus = {
+            "file": file_menu,
+            "view": view_menu,
+            "help": help_menu,
+            "language": language_menu,
+        }
+
+    def change_language(self, language_code: str):
+        """Change the application language and update UI."""
+        set_language(language_code)
+        self.update_ui_text()
+        
+        # Update language menu checkmarks using stored actions
+        if hasattr(self, 'language_actions'):
+            for code, action in self.language_actions.items():
+                action.setChecked(code == language_code)
 
     def setup_statusbar(self) -> None:
         """Create status bar."""
         self.status_bar = self.statusBar()
-        self.status_label = QLabel("Ready - Load an image to begin")
+        self.status_label = QLabel(tr("status_ready"))
         self.status_bar.addWidget(self.status_label)
 
         # Coordinate display
-        self.coord_label = QLabel("Position: -")
+        self.coord_label = QLabel(f"{tr('position')} -")
         self.status_bar.addPermanentWidget(self.coord_label)
 
     def keyPressEvent(self, event):
@@ -2766,26 +4946,26 @@ class ViewerController(QObject):
         menu = QMenu(self.view)
 
         # Copy coordinates action
-        copy_coords_action = menu.addAction("Copy Coordinates")
+        copy_coords_action = menu.addAction(tr("copy_coordinates"))
         copy_coords_action.triggered.connect(
             lambda: self.copy_measurement_coordinates(item)
         )
 
         # Copy length action
-        copy_length_action = menu.addAction("Copy Length")
+        copy_length_action = menu.addAction(tr("copy_length"))
         copy_length_action.triggered.connect(
             lambda: self.copy_measurement_length(item))
 
         menu.addSeparator()
 
         # Apply current style to all action
-        apply_to_all_action = menu.addAction("Apply Style to All")
+        apply_to_all_action = menu.addAction(tr("apply_style_to_all"))
         apply_to_all_action.triggered.connect(self.apply_style_to_all)
 
         menu.addSeparator()
 
         # Delete action
-        delete_action = menu.addAction("Delete")
+        delete_action = menu.addAction(tr("delete"))
         delete_action.triggered.connect(
             lambda: self.delete_measurement_by_item(item))
 
@@ -4276,7 +6456,7 @@ class ViewerController(QObject):
         )
 
         if filepath:
-            self.view.status_label.setText("Loading image...")
+            self.view.status_label.setText(tr("status_loading_image"))
 
             # Show progress bar if control panel exists
             if (
@@ -4300,7 +6480,7 @@ class ViewerController(QObject):
         )
 
         if filepath:
-            self.view.status_label.setText("Loading labels...")
+            self.view.status_label.setText(tr("status_loading_labels"))
 
             # Show progress bar if control panel exists
             if (
@@ -4333,7 +6513,7 @@ class ViewerController(QObject):
                                 f"File not found: {filepath}")
             return
 
-        self.view.status_label.setText("Loading image from path...")
+        self.view.status_label.setText(tr("status_loading_image_path"))
         self.view.progress_bar.setValue(0)
         self.view.progress_bar.setVisible(True)
 
@@ -4360,7 +6540,7 @@ class ViewerController(QObject):
                                 f"File not found: {filepath}")
             return
 
-        self.view.status_label.setText("Loading labels from path...")
+        self.view.status_label.setText(tr("status_loading_labels_path"))
         self.view.progress_bar.setValue(0)
         self.view.progress_bar.setVisible(True)
 
@@ -4395,7 +6575,7 @@ class ViewerController(QObject):
             slice_view.pixmap_item = QGraphicsPixmapItem()
             slice_view.scene.addItem(slice_view.pixmap_item)
 
-        self.view.status_label.setText("Ready - Load an image to begin")
+        self.view.status_label.setText(tr("status_ready"))
 
         # Reset progress bar if control panel exists
         if hasattr(self.view, "control_dock") and self.view.control_dock is not None:
@@ -4550,7 +6730,7 @@ class ViewerController(QObject):
             # Update button appearance
             self.view.panel_toggle_btn.setText("◀")
             self.view.panel_toggle_btn.setToolTip(
-                "Hide Control Panel (Ctrl+T)")
+                tr("toggle_control_panel_tooltip"))
             self.view.actions["toggle_control_panel"].setChecked(True)
 
     def _reconnect_control_signals(self) -> None:
@@ -4640,7 +6820,7 @@ class ViewerController(QObject):
 
     def _on_load_error(self, error_msg: str) -> None:
         """Handle loading errors."""
-        self.view.status_label.setText("Load failed")
+        self.view.status_label.setText(tr("status_load_failed"))
 
         # Hide progress bar if control panel exists
         if hasattr(self.view, "control_dock") and self.view.control_dock is not None:
@@ -4711,7 +6891,7 @@ class ViewerController(QObject):
     def _on_mouse_position(self, view_name: str, x: int, y: int) -> None:
         """Handle mouse position for tooltips and coordinates."""
         # Update coordinate display
-        self.view.coord_label.setText(f"Position: ({x}, {y})")
+        self.view.coord_label.setText(f"{tr('position')} ({x}, {y})")
 
         # Show label tooltip if available
         if self.model.label_data is not None:
@@ -4722,7 +6902,7 @@ class ViewerController(QObject):
                         self.view.slice_views[view_name].mapFromScene(
                             QPointF(x, y))
                     ),
-                    f"Label: {label_value}",
+                    f"{tr('label_prefix')}: {label_value}",
                 )
 
     def _rotate_view(self, view_name: str) -> None:
@@ -4748,7 +6928,7 @@ class ViewerController(QObject):
         """Handle alpha slider changes."""
         alpha = value / 100.0
         self.model.global_alpha = alpha
-        self.view.alpha_label.setText(f"Alpha: {alpha:.2f}")
+        self.view.alpha_label.setText(f"{tr('alpha')}: {alpha:.2f}")
 
         # Update all view configs
         for config in self.model.view_configs.values():
@@ -4772,7 +6952,7 @@ class ViewerController(QObject):
 
         if not label_values:
             # No labels - show empty message
-            empty_label = QLabel("No labels found")
+            empty_label = QLabel(tr("no_labels_found"))
             empty_label.setAlignment(Qt.AlignCenter)
             empty_label.setStyleSheet("color: #666; font-style: italic;")
             self.view.label_colors_content_layout.addWidget(empty_label)
@@ -4785,7 +6965,7 @@ class ViewerController(QObject):
             label_layout = QHBoxLayout()
 
             # Label value text
-            label_text = QLabel(f"Label {label_val}:")
+            label_text = QLabel(f"{tr('label_prefix')} {label_val}:")
             label_text.setMinimumWidth(80)
             label_layout.addWidget(label_text)
 
@@ -4857,7 +7037,7 @@ class ViewerController(QObject):
         self.view.label_color_buttons.clear()
 
         # Show empty message
-        empty_label = QLabel("No labels loaded")
+        empty_label = QLabel(tr("no_labels_loaded"))
         empty_label.setAlignment(Qt.AlignCenter)
         empty_label.setStyleSheet("color: #666; font-style: italic;")
         self.view.label_colors_content_layout.addWidget(empty_label)

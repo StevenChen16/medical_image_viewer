@@ -141,12 +141,14 @@ class TranslationManager:
                 "about_open_image": "Open image file",
                 "about_open_labels": "Open label file",
                 "about_save_screenshot": "Save screenshot",
+                "about_copy_screenshot": "Copy screenshot to clipboard",
                 "about_save_volume": "Open volume save menu",
                 "about_reset": "Reset views and clear cache",
                 "about_toggle_panel": "Toggle control panel",
                 "about_fit_views": "Fit all views to window",
                 "about_show_dialog": "Show this dialog",
                 "about_scroll_slices": "Scroll through slices",
+                "about_shift_scroll": "Fast scroll through slices",
                 "about_zoom": "Zoom in/out",
                 "about_alt_drag": "Adjust window/level contrast",
                 "about_pan_view": "Pan view",
@@ -288,12 +290,14 @@ class TranslationManager:
                 "about_open_image": "打开影像文件",
                 "about_open_labels": "打开标签文件",
                 "about_save_screenshot": "保存截图",
+                "about_copy_screenshot": "复制截图到剪贴板",
                 "about_save_volume": "打开体数据保存菜单",
                 "about_reset": "重置视图并清空缓存",
                 "about_toggle_panel": "切换控制面板显示",
                 "about_fit_views": "适应所有视图到窗口",
                 "about_show_dialog": "显示此对话框",
                 "about_scroll_slices": "切换切片",
+                "about_shift_scroll": "快速切换切片",
                 "about_zoom": "缩放视图",
                 "about_alt_drag": "调节窗宽窗位对比度",
                 "about_pan_view": "平移视图",
@@ -435,12 +439,14 @@ class TranslationManager:
                 "about_open_image": "Ouvrir un fichier image",
                 "about_open_labels": "Ouvrir un fichier d'étiquettes",
                 "about_save_screenshot": "Enregistrer capture d'écran",
+                "about_copy_screenshot": "Copier capture d'écran dans le presse-papiers",
                 "about_save_volume": "Ouvrir le menu d'enregistrement de volume",
                 "about_reset": "Réinitialiser les vues et vider le cache",
                 "about_toggle_panel": "Basculer le panneau de contrôle",
                 "about_fit_views": "Ajuster toutes les vues à la fenêtre",
                 "about_show_dialog": "Afficher cette boîte de dialogue",
                 "about_scroll_slices": "Faire défiler les coupes",
+                "about_shift_scroll": "Défilement rapide des coupes",
                 "about_zoom": "Zoomer/Dézoomer",
                 "about_alt_drag": "Ajuster fenêtre/niveau contraste",
                 "about_pan_view": "Panoramique de la vue",
@@ -3420,12 +3426,14 @@ class AboutDialog(QDialog):
             <tr><td style="padding: 4px;"><b>Ctrl+O</b></td><td style="padding: 4px;">{tr("about_open_image")}</td></tr>
             <tr><td style="padding: 4px;"><b>Ctrl+L</b></td><td style="padding: 4px;">{tr("about_open_labels")}</td></tr>
             <tr><td style="padding: 4px;"><b>Ctrl+S</b></td><td style="padding: 4px;">{tr("about_save_screenshot")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+Shift+C</b></td><td style="padding: 4px;">{tr("about_copy_screenshot")}</td></tr>
             <tr><td style="padding: 4px;"><b>Ctrl+Shift+S</b></td><td style="padding: 4px;">{tr("about_save_volume")}</td></tr>
             <tr><td style="padding: 4px;"><b>Ctrl+R</b></td><td style="padding: 4px;">{tr("about_reset")}</td></tr>
             <tr><td style="padding: 4px;"><b>Ctrl+T</b></td><td style="padding: 4px;">{tr("about_toggle_panel")}</td></tr>
             <tr><td style="padding: 4px;"><b>F</b></td><td style="padding: 4px;">{tr("about_fit_views")}</td></tr>
             <tr><td style="padding: 4px;"><b>F1</b></td><td style="padding: 4px;">{tr("about_show_dialog")}</td></tr>
             <tr><td style="padding: 4px;"><b>Wheel</b></td><td style="padding: 4px;">{tr("about_scroll_slices")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Shift+Wheel</b></td><td style="padding: 4px;">{tr("about_shift_scroll")}</td></tr>
             <tr><td style="padding: 4px;"><b>Ctrl+Wheel</b></td><td style="padding: 4px;">{tr("about_zoom")}</td></tr>
             <tr><td style="padding: 4px;"><b>Alt+Left-drag</b></td><td style="padding: 4px;">{tr("about_alt_drag")}</td></tr>
             <tr><td style="padding: 4px;"><b>Right-drag</b></td><td style="padding: 4px;">{tr("about_pan_view")}</td></tr>

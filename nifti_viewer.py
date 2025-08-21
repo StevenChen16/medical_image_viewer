@@ -7,7 +7,7 @@ A medical image viewer for NIfTI and MHA format files.
 import time
 import dataclasses
 import csv
-__version__ = "0.1.5"
+__version__ = "0.16.0"
 __author__ = "Steven Chen"
 __license__ = "MIT"
 __copyright__ = "Copyright 2025, Steven Chen"
@@ -3109,7 +3109,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
 
         # Version info
-        version_label = QLabel("Version 0.1.5")
+        version_label = QLabel("Version 0.16.0")
         version_label.setStyleSheet(
             "font-size: 14px; color: #ccc; margin-bottom: 15px;"
         )
@@ -3181,7 +3181,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
 
         # Version info
-        version_label = QLabel("版本 0.1.5")
+        version_label = QLabel("版本 0.16.0")
         version_label.setStyleSheet(
             "font-size: 14px; color: #ccc; margin-bottom: 15px;"
         )
@@ -3253,7 +3253,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
 
         # Version info
-        version_label = QLabel("Version 0.1.5")
+        version_label = QLabel("Version 0.16.0")
         version_label.setStyleSheet(
             "font-size: 14px; color: #ccc; margin-bottom: 15px;"
         )
@@ -3406,7 +3406,7 @@ class AboutDialog(QDialog):
         self.other_content_layout.addWidget(title_label)
 
         # Version info
-        version_label = QLabel("Version 0.1.5")
+        version_label = QLabel("Version 0.16.0")
         version_label.setStyleSheet(
             "font-size: 14px; color: #ccc; margin-bottom: 15px;"
         )

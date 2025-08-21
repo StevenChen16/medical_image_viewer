@@ -14,6 +14,7 @@ __copyright__ = "Copyright 2025, Steven Chen"
 __all__ = ["MainWindow", "ViewerController", "ImageModel", "main"]
 
 import argparse
+import colorsys
 import logging
 import os
 import sys
@@ -36,7 +37,7 @@ except ImportError:
     SITK_AVAILABLE = False
 
 from PySide6.QtCore import (QLine, QLineF, QObject, QPoint, QPointF, QRect,
-                            QRectF, QRunnable, QSize, Qt, QThread, QThreadPool,
+                            QRectF, QRunnable, QSettings, QSize, Qt, QThread, QThreadPool,
                             QTimer, Signal)
 from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QCursor, QFont,
                            QFontMetricsF, QIcon, QImage, QMouseEvent, QPainter,
@@ -3454,7 +3455,9 @@ class SliceView(QGraphicsView):
                     )
         else:
             # Slice navigation with plain wheel
-            delta = 1 if event.angleDelta().y() > 0 else -1
+            # Check for Shift modifier to accelerate (×10 step)
+            step_multiplier = 10 if modifiers & Qt.ShiftModifier else 1
+            delta = step_multiplier if event.angleDelta().y() > 0 else -step_multiplier
             self.wheelScrolled.emit(delta)
 
         event.accept()
@@ -3892,11 +3895,20 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1200, 800)
         self.resize(1400, 900)  # Set a good default size
 
+        # Initialize settings
+        self._settings = QSettings("SC", "MedicalImageViewer")
+
         # Create components
         self.setup_ui()
         self.setup_toolbar()
         self.setup_menu()
         self.setup_statusbar()
+        
+        # Enable drag and drop
+        self.setAcceptDrops(True)
+        
+        # Restore settings after UI is set up
+        self._restore_settings()
     
     def update_ui_text(self):
         """Update all UI text with current language translations."""
@@ -4483,6 +4495,10 @@ class MainWindow(QMainWindow):
         save_screenshot_action = QAction(tr("save_screenshot"), self)
         save_screenshot_action.setShortcut("Ctrl+S")
         file_menu.addAction(save_screenshot_action)
+        
+        copy_screenshot_action = QAction("Copy Screenshot", self)
+        copy_screenshot_action.setShortcut("Ctrl+Shift+C")
+        file_menu.addAction(copy_screenshot_action)
 
         file_menu.addSeparator()
 
@@ -4624,6 +4640,7 @@ class MainWindow(QMainWindow):
             "save_label": save_label_action,
             "save_overlay": save_overlay_action,
             "save_screenshot": save_screenshot_action,
+            "copy_screenshot": copy_screenshot_action,
             "reset": reset_action,
             "exit": exit_action,
             "fit_all": fit_all_action,
@@ -4664,6 +4681,72 @@ class MainWindow(QMainWindow):
         if event.key() == Qt.Key_Delete:
             self.controller.delete_selected_measurement()
         super().keyPressEvent(event)
+    
+    def dragEnterEvent(self, event):
+        """Handle drag enter events for file dropping."""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls and urls[0].isLocalFile():
+                file_path = urls[0].toLocalFile().lower()
+                # Accept common medical image formats
+                if file_path.endswith(('.nii', '.nii.gz', '.mha', '.mhd', '.nrrd')):
+                    event.acceptProposedAction()
+                    return
+        event.ignore()
+    
+    def dropEvent(self, event):
+        """Handle drop events for file loading."""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls and urls[0].isLocalFile():
+                file_path = urls[0].toLocalFile()
+                # Determine if this is a label file based on filename patterns
+                file_lower = file_path.lower()
+                if any(keyword in file_lower for keyword in ['label', 'seg', 'mask']):
+                    self._load_labels_from_path(file_path)
+                else:
+                    self._load_image_from_path(file_path)
+                event.acceptProposedAction()
+                return
+        event.ignore()
+    
+    def _load_image_from_path(self, path: str):
+        """Load image from file path via controller."""
+        self.controller.load_image_from_path(path)
+    
+    def _load_labels_from_path(self, path: str):
+        """Load labels from file path via controller."""
+        self.controller.load_labels_from_path(path)
+    
+    def _restore_settings(self):
+        """Restore settings from QSettings."""
+        # Restore last image path if it exists
+        last_image = self._settings.value("last_image_path", "", str)
+        if last_image and Path(last_image).exists():
+            # Load the image in the background after a short delay to allow UI to finish setup
+            QTimer.singleShot(100, lambda: self.controller.load_image_from_path(last_image))
+        
+        # Restore overlay alpha setting
+        if hasattr(self, 'alpha_slider'):
+            alpha_value = self._settings.value("overlay_alpha", 128, int)  # Default to 50% (128/255)
+            self.alpha_slider.setValue(alpha_value)
+    
+    def closeEvent(self, event):
+        """Save settings when closing the application."""
+        # Save overlay alpha setting
+        if hasattr(self, 'alpha_slider'):
+            self._settings.setValue("overlay_alpha", self.alpha_slider.value())
+        
+        # Save current image path if one is loaded
+        if (self.controller.model.image_data is not None and 
+            hasattr(self.controller.model, 'image_filepath')):
+            self._settings.setValue("last_image_path", self.controller.model.image_filepath)
+        
+        super().closeEvent(event)
+    
+    def _save_last_image_path(self, path: str):
+        """Save last loaded image path to settings."""
+        self._settings.setValue("last_image_path", path)
 
 
 # ============================================================================
@@ -4730,6 +4813,8 @@ class ViewerController(QObject):
         self.view.actions["save_overlay"].triggered.connect(self._save_overlay)
         self.view.actions["save_screenshot"].triggered.connect(
             self.save_screenshot)
+        self.view.actions["copy_screenshot"].triggered.connect(
+            self.copy_screenshot_to_clipboard)
         self.view.actions["toggle_control_panel"].triggered.connect(
             self.toggle_control_panel
         )
@@ -6548,6 +6633,60 @@ class ViewerController(QObject):
         worker = LoadWorker(self.model, filepath, True)
         self.thread_pool.start(worker)
 
+    def load_image_from_path(self, filepath: str) -> None:
+        """Load image directly from file path (for drag & drop)."""
+        if not Path(filepath).exists():
+            QMessageBox.warning(self.view, "Warning", f"File not found: {filepath}")
+            return
+        
+        # Check for SimpleITK availability for MHA files
+        if filepath.lower().endswith(('.mha', '.mhd')) and not SITK_AVAILABLE:
+            QMessageBox.warning(
+                self.view, 
+                "SimpleITK Not Available", 
+                "SimpleITK is required for MHA/MHD files but is not installed. "
+                "Please use NIfTI format (.nii/.nii.gz) or install SimpleITK."
+            )
+            return
+
+        self.view.status_label.setText(tr("status_loading_image"))
+        
+        # Show progress bar if control panel exists
+        if hasattr(self.view, "control_dock") and self.view.control_dock is not None:
+            self.view.progress_bar.setValue(0)
+            self.view.progress_bar.setVisible(True)
+
+        # Load in background
+        worker = LoadWorker(self.model, filepath, False)
+        self.thread_pool.start(worker)
+
+    def load_labels_from_path(self, filepath: str) -> None:
+        """Load labels directly from file path (for drag & drop)."""
+        if not Path(filepath).exists():
+            QMessageBox.warning(self.view, "Warning", f"File not found: {filepath}")
+            return
+        
+        # Check for SimpleITK availability for MHA files
+        if filepath.lower().endswith(('.mha', '.mhd')) and not SITK_AVAILABLE:
+            QMessageBox.warning(
+                self.view, 
+                "SimpleITK Not Available", 
+                "SimpleITK is required for MHA/MHD files but is not installed. "
+                "Please use NIfTI format (.nii/.nii.gz) or install SimpleITK."
+            )
+            return
+
+        self.view.status_label.setText(tr("status_loading_labels"))
+        
+        # Show progress bar if control panel exists
+        if hasattr(self.view, "control_dock") and self.view.control_dock is not None:
+            self.view.progress_bar.setValue(0)
+            self.view.progress_bar.setVisible(True)
+
+        # Load in background
+        worker = LoadWorker(self.model, filepath, True)
+        self.thread_pool.start(worker)
+
     def reset_all(self) -> None:
         """Reset all views and data."""
         # Clear model
@@ -6674,6 +6813,18 @@ class ViewerController(QObject):
             self.view.status_label.setText(
                 f"Screenshot saved: {Path(filepath).name}")
 
+    def copy_screenshot_to_clipboard(self) -> None:
+        """Copy current view screenshot to clipboard."""
+        from PySide6.QtGui import QGuiApplication
+        
+        # Capture the central widget
+        pixmap = self.view.centralWidget().grab()
+        img = pixmap.toImage()
+        
+        # Copy to clipboard
+        QGuiApplication.clipboard().setImage(img)
+        self.view.status_label.setText("Screenshot copied to clipboard")
+
     def show_about(self) -> None:
         """Show About dialog."""
         about_dialog = AboutDialog(self.view)
@@ -6773,6 +6924,9 @@ class ViewerController(QObject):
             f"Image loaded: {Path(filepath).name} - Shape: {shape}"
         )
 
+        # Save the loaded image path to settings
+        self.view._save_last_image_path(filepath)
+
         # Update control panel elements if they exist
         if hasattr(self.view, "control_dock") and self.view.control_dock is not None:
             self.view.progress_bar.setVisible(False)
@@ -6808,6 +6962,9 @@ class ViewerController(QObject):
             f"Labels loaded: {Path(filepath).name} - {unique_count} unique labels"
         )
 
+        # Auto-generate distinguishable colors for labels
+        self._generate_label_colormap()
+
         # Update control panel elements if they exist
         if hasattr(self.view, "control_dock") and self.view.control_dock is not None:
             self.view.progress_bar.setVisible(False)
@@ -6817,6 +6974,38 @@ class ViewerController(QObject):
             self._populate_label_color_controls()
 
         self._update_all_views()
+
+    def _generate_label_colormap(self) -> None:
+        """Generate distinguishable colors for integer labels using HSV color space."""
+        if self.model.label_data is None:
+            return
+        
+        # Get unique label values (excluding 0/background)
+        unique_labels = np.unique(self.model.label_data)
+        label_values = [int(v) for v in unique_labels if v != 0]
+        
+        if not label_values:
+            return
+        
+        # Generate evenly distributed hues to avoid similar colors
+        n_labels = len(label_values)
+        for i, label_val in enumerate(label_values):
+            # Skip if user has already customized this color
+            if label_val in self.model._custom_label_colors:
+                continue
+                
+            # Generate evenly spaced hue (0-1 range)
+            hue = i / max(1, n_labels)
+            # Use high saturation and value for good visibility on medical images
+            saturation = 0.85
+            value = 1.0
+            
+            # Convert HSV to RGB
+            r, g, b = colorsys.hsv_to_rgb(hue, saturation, value)
+            rgb_color = (int(r * 255), int(g * 255), int(b * 255))
+            
+            # Set the generated color
+            self.model.set_label_color(label_val, rgb_color)
 
     def _on_load_error(self, error_msg: str) -> None:
         """Handle loading errors."""

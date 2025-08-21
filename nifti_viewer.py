@@ -2064,6 +2064,20 @@ class ImageModel(QObject):
             view_name, slice_idx, show_overlay and self.global_overlay, alpha
         )
 
+    def render_slice_with_wl(
+        self,
+        view_name: str,
+        slice_idx: int,
+        window: float,
+        level: float,
+        show_overlay: bool = True,
+        alpha: float = 0.5,
+    ) -> QImage:
+        """Render slice with specific window/level values."""
+        return self._render_slice_wl_cached(
+            view_name, slice_idx, window, level, show_overlay and self.global_overlay, alpha
+        )
+
     @lru_cache(maxsize=100)
     def _render_slice_cached(
         self, view_name: str, slice_idx: int, show_overlay: bool, alpha: float
@@ -2136,6 +2150,81 @@ class ImageModel(QObject):
 
         # Don't apply rotation to QImage - let pixmap handle rotation transform
         return qimage
+
+    @lru_cache(maxsize=100)
+    def _render_slice_wl_cached(
+        self, view_name: str, slice_idx: int, window: float, level: float, 
+        show_overlay: bool, alpha: float
+    ) -> QImage:
+        """Internal slice renderer with window/level that is LRU cached."""
+        config = self.view_configs[view_name]
+        axis = config["axis"]
+
+        img_slice = self.get_slice_data(axis, slice_idx, False)
+        if img_slice.size == 0:
+            return QImage()
+
+        # Apply window/level before normalization
+        img_wl = self._apply_window_level(img_slice, window, level)
+
+        # Handle overlay if available
+        has_overlay = (
+            show_overlay
+            and self.label_data is not None
+            and self.get_slice_data(axis, slice_idx, True).size > 0
+        )
+
+        if has_overlay:
+            label_slice = self.get_slice_data(axis, slice_idx, True)
+            overlay = self.create_label_overlay(label_slice)
+            if overlay is not None:
+                # Medical-grade alpha blending with ColorBrewer Paired colors
+                img_rgb = np.stack([img_wl] * 3, axis=-1)
+                mask = overlay.sum(axis=-1) > 0
+                img_rgb[mask] = (
+                    (1 - alpha) * img_rgb[mask] + alpha * overlay[mask]
+                ).astype(np.uint8)
+                
+                img_flipped = np.flipud(img_rgb)
+                img_flipped = np.ascontiguousarray(img_flipped)
+                height, width, _ = img_rgb.shape
+                bytes_per_line = 3 * width
+                qimage = QImage(
+                    img_flipped.copy().data,
+                    width,
+                    height,
+                    bytes_per_line,
+                    QImage.Format_RGB888,
+                )
+            else:
+                has_overlay = False
+
+        if not has_overlay:
+            # Use efficient grayscale format
+            img_flipped = np.flipud(img_wl)
+            img_flipped = np.ascontiguousarray(img_flipped)
+            height, width = img_flipped.shape
+            qimage = QImage(
+                img_flipped.copy().data,
+                width,
+                height,
+                img_flipped.strides[0],
+                QImage.Format_Grayscale8,
+            )
+
+        return qimage
+
+    def _apply_window_level(self, img_slice: np.ndarray, window: float, level: float) -> np.ndarray:
+        """Apply window/level to image slice and return as uint8."""
+        # Calculate window bounds
+        w_min = level - window / 2.0
+        w_max = level + window / 2.0
+        
+        # Apply window/level mapping
+        img_clipped = np.clip((img_slice - w_min) / (w_max - w_min), 0, 1)
+        
+        # Convert to uint8
+        return (img_clipped * 255).astype(np.uint8)
 
     def load_image(self, filepath: str) -> None:
         """Load medical image data."""
@@ -3398,6 +3487,12 @@ class SliceView(QGraphicsView):
         # Pan variables
         self._pan_start = QPointF()
         self._panning = False
+        
+        # Window/Level variables for medical image display
+        self._window = 400.0  # Default window width
+        self._level = 40.0    # Default level center
+        self._wl_dragging = False
+        self._wl_last_pos = None
 
     def set_model(self, model: ImageModel) -> None:
         """Connect to data model."""
@@ -3463,8 +3558,15 @@ class SliceView(QGraphicsView):
         event.accept()
 
     def mousePressEvent(self, event: QMouseEvent):
-        """Handle mouse press for panning."""
-        if event.button() == Qt.RightButton:
+        """Handle mouse press for panning and window/level adjustment."""
+        if event.button() == Qt.LeftButton and (event.modifiers() & Qt.AltModifier):
+            # Window/Level adjustment with Alt+Left mouse
+            self._wl_dragging = True
+            self._wl_last_pos = event.position()
+            self.setCursor(Qt.SizeAllCursor)
+            event.accept()
+            return
+        elif event.button() == Qt.RightButton:
             self._panning = True
             self._pan_start = event.position()
             self.setCursor(Qt.ClosedHandCursor)
@@ -3499,7 +3601,25 @@ class SliceView(QGraphicsView):
 
     def mouseMoveEvent(self, event: QMouseEvent):
         """Handle mouse movement for panning, tooltips, and eraser highlighting."""
-        if self._panning:
+        if self._wl_dragging:
+            # Window/Level adjustment
+            delta = event.position() - self._wl_last_pos
+            self._wl_last_pos = event.position()
+            
+            # Horizontal movement adjusts window, vertical adjusts level
+            self._window = max(1.0, self._window + delta.x() * 2.0)
+            self._level = self._level + delta.y() * 2.0
+            
+            # Trigger re-rendering with new W/L values
+            if self.model:
+                self.model._render_slice_cached.cache_clear()
+                QPixmapCache.clear()
+                # Force update the current slice
+                self._update_current_slice_with_wl()
+            
+            event.accept()
+            return
+        elif self._panning:
             # Pan the view
             delta = event.position() - self._pan_start
             self.horizontalScrollBar().setValue(
@@ -3553,7 +3673,12 @@ class SliceView(QGraphicsView):
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         """Handle mouse release."""
-        if event.button() == Qt.RightButton and self._panning:
+        if self._wl_dragging and event.button() == Qt.LeftButton:
+            self._wl_dragging = False
+            self.setCursor(Qt.ArrowCursor)
+            event.accept()
+            return
+        elif event.button() == Qt.RightButton and self._panning:
             self._panning = False
             self.setCursor(Qt.ArrowCursor)
         elif (
@@ -3879,6 +4004,35 @@ class SliceView(QGraphicsView):
         self.resetTransform()
         if not self.pixmap_item.pixmap().isNull():
             self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
+    
+    def _update_current_slice_with_wl(self) -> None:
+        """Update current slice display with new window/level values."""
+        if not self.model:
+            return
+        
+        # Get current slice index
+        config = self.model.view_configs.get(self.view_name)
+        if not config:
+            return
+            
+        slice_idx = config["slice"]
+        
+        # Get slice data with window/level applied
+        qimage = self.model.render_slice_with_wl(
+            self.view_name, slice_idx, self._window, self._level,
+            show_overlay=self.model.global_overlay,
+            alpha=getattr(self.model, 'overlay_alpha', 0.5)
+        )
+        
+        # Update the display
+        if not qimage.isNull():
+            self.set_image(qimage, config.get("rotation", 0))
+
+    def set_window_level(self, window: float, level: float) -> None:
+        """Set window/level values and update display."""
+        self._window = max(1.0, window)
+        self._level = level
+        self._update_current_slice_with_wl()
 
 
 class MainWindow(QMainWindow):
@@ -4188,6 +4342,14 @@ class MainWindow(QMainWindow):
             checkbox.setChecked(True)
             self.view_checkboxes[name] = checkbox
             view_layout.addWidget(checkbox, 0, i)
+        
+        # Window/Level preset dropdown
+        wl_label = QLabel("W/L Preset:")
+        view_layout.addWidget(wl_label, 1, 0)
+        self.wl_preset = QComboBox()
+        self.wl_preset.addItems(["Default", "Brain", "Abdomen", "Bone"])
+        view_layout.addWidget(self.wl_preset, 1, 1, 1, 2)  # Span 2 columns
+        
         view_group = create_collapsible_group(tr("view_controls"), view_layout)
         self.view_group = view_group  # Store reference for language updates
         dock_layout.addWidget(view_group)
@@ -4855,6 +5017,10 @@ class ViewerController(QObject):
 
         # Control panel toggle button
         self.view.panel_toggle_btn.clicked.connect(self.toggle_control_panel)
+
+        # Window/Level preset
+        if hasattr(self.view, 'wl_preset'):
+            self.view.wl_preset.currentTextChanged.connect(self._apply_wl_preset)
 
     def setup_slice_view_connections(self) -> None:
         """Connect slice view signals."""
@@ -7124,6 +7290,21 @@ class ViewerController(QObject):
             config["alpha"] = alpha
 
         self._update_all_views()
+
+    def _apply_wl_preset(self, preset_name: str) -> None:
+        """Apply window/level preset to all views."""
+        presets = {
+            "Default": (400, 40),
+            "Brain": (80, 40),
+            "Abdomen": (350, 50),
+            "Bone": (2000, 500),
+        }
+        
+        if preset_name in presets:
+            window, level = presets[preset_name]
+            # Apply to all slice views
+            for slice_view in self.view.slice_views.values():
+                slice_view.set_window_level(float(window), float(level))
 
     def _populate_label_color_controls(self) -> None:
         """Populate the label color controls based on current label data."""

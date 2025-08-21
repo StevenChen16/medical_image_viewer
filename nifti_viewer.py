@@ -88,6 +88,7 @@ class TranslationManager:
                 "exit": "Exit",
                 "fit_all_views": "Fit All Views",
                 "toggle_control_panel": "Toggle Control Panel",
+                "toggle_crosshair": "Show Crosshair",
                 "about": "About...",
                 "language": "Language",
                 
@@ -237,6 +238,7 @@ class TranslationManager:
                 "exit": "退出",
                 "fit_all_views": "适应所有视图",
                 "toggle_control_panel": "切换控制面板",
+                "toggle_crosshair": "显示十字光标",
                 "about": "关于...",
                 "language": "语言",
                 
@@ -386,6 +388,7 @@ class TranslationManager:
                 "exit": "Quitter",
                 "fit_all_views": "Ajuster Toutes les Vues",
                 "toggle_control_panel": "Basculer le Panneau de Contrôle",
+                "toggle_crosshair": "Afficher le Réticule",
                 "about": "À propos...",
                 "language": "Langue",
                 
@@ -535,6 +538,7 @@ class TranslationManager:
                 "exit": "Beenden",
                 "fit_all_views": "Alle Ansichten anpassen",
                 "toggle_control_panel": "Kontrollpanel umschalten",
+                "toggle_crosshair": "Fadenkreuz anzeigen",
                 "about": "Über...",
                 "language": "Sprache",
                 
@@ -680,6 +684,7 @@ class TranslationManager:
                 "exit": "終了",
                 "fit_all_views": "すべてのビューに合わせる",
                 "toggle_control_panel": "コントロールパネルの切り替え",
+                "toggle_crosshair": "十字線を表示",
                 "about": "について...",
                 "language": "言語",
                 
@@ -825,6 +830,7 @@ class TranslationManager:
                 "exit": "종료",
                 "fit_all_views": "모든 뷰에 맞춤",
                 "toggle_control_panel": "제어판 토글",
+                "toggle_crosshair": "십자선 표시",
                 "about": "정보...",
                 "language": "언어",
                 
@@ -970,6 +976,7 @@ class TranslationManager:
                 "exit": "Salir",
                 "fit_all_views": "Ajustar Todas las Vistas",
                 "toggle_control_panel": "Alternar Panel de Control",
+                "toggle_crosshair": "Mostrar Cruz",
                 "about": "Acerca de...",
                 "language": "Idioma",
                 
@@ -1115,6 +1122,7 @@ class TranslationManager:
                 "exit": "結束",
                 "fit_all_views": "適應所有檢視",
                 "toggle_control_panel": "切換控制面板",
+                "toggle_crosshair": "顯示十字線",
                 "about": "關於...",
                 "language": "語言",
                 
@@ -1260,6 +1268,7 @@ class TranslationManager:
                 "exit": "Esci",
                 "fit_all_views": "Adatta Tutte le Viste",
                 "toggle_control_panel": "Attiva/Disattiva Pannello di Controllo",
+                "toggle_crosshair": "Mostra Mirino",
                 "about": "Informazioni...",
                 "language": "Lingua",
                 
@@ -1405,6 +1414,7 @@ class TranslationManager:
                 "exit": "Sair",
                 "fit_all_views": "Ajustar Todas as Visualizações",
                 "toggle_control_panel": "Alternar Painel de Controle",
+                "toggle_crosshair": "Mostrar Cruz",
                 "about": "Sobre...",
                 "language": "Idioma",
                 
@@ -1550,6 +1560,7 @@ class TranslationManager:
                 "exit": "Выход",
                 "fit_all_views": "Подогнать Все Виды",
                 "toggle_control_panel": "Переключить Панель Управления",
+                "toggle_crosshair": "Показать Перекрестие",
                 "about": "О программе...",
                 "language": "Язык",
                 
@@ -3502,6 +3513,9 @@ class SliceView(QGraphicsView):
         
         # Enable drag and drop
         self.setAcceptDrops(True)
+        # Let internal viewport also accept drops and forward events to this SliceView
+        self.viewport().setAcceptDrops(True)
+        self.viewport().installEventFilter(self)
 
         # Pan variables
         self._pan_start = QPointF()
@@ -3526,6 +3540,8 @@ class SliceView(QGraphicsView):
         # Initially hide crosshairs until position is set
         self.cross_h.setVisible(False)
         self.cross_v.setVisible(False)
+        # Crosshair visibility state
+        self.crosshair_visible = True
 
     def set_model(self, model: ImageModel) -> None:
         """Connect to data model."""
@@ -4125,9 +4141,27 @@ class SliceView(QGraphicsView):
         # Vertical line (spans full height)
         self.cross_v.setLine(x, 0, x, height)
         
-        # Make crosshairs visible
-        self.cross_h.setVisible(True)
-        self.cross_v.setVisible(True)
+        # Make crosshairs visible only if crosshair visibility is enabled
+        self.cross_h.setVisible(self.crosshair_visible)
+        self.cross_v.setVisible(self.crosshair_visible)
+
+    def set_crosshair_visible(self, visible: bool) -> None:
+        """Set crosshair visibility state and update display."""
+        self.crosshair_visible = visible
+        self.cross_h.setVisible(visible)
+        self.cross_v.setVisible(visible)
+
+    def eventFilter(self, obj, event):
+        """Forward viewport drag/drop events to this SliceView."""
+        from PySide6.QtCore import QEvent
+        if obj is self.viewport():
+            if event.type() == QEvent.DragEnter:
+                self.dragEnterEvent(event)
+                return True
+            elif event.type() == QEvent.Drop:
+                self.dropEvent(event)
+                return True
+        return super().eventFilter(obj, event)
 
     def dragEnterEvent(self, event):
         """Handle drag enter events for file dropping."""
@@ -4218,6 +4252,7 @@ class MainWindow(QMainWindow):
             self.actions["exit"].setText(tr("exit"))
             self.actions["fit_all"].setText(tr("fit_all_views"))
             self.actions["toggle_control_panel"].setText(tr("toggle_control_panel"))
+            self.actions["toggle_crosshair"].setText(tr("toggle_crosshair"))
             self.actions["about"].setText(tr("about"))
         
         # Update control dock
@@ -4830,6 +4865,12 @@ class MainWindow(QMainWindow):
         toggle_control_panel_action.setChecked(True)
         view_menu.addAction(toggle_control_panel_action)
 
+        toggle_crosshair_action = QAction(tr("toggle_crosshair"), self)
+        toggle_crosshair_action.setShortcut("Ctrl+H")
+        toggle_crosshair_action.setCheckable(True)
+        toggle_crosshair_action.setChecked(True)
+        view_menu.addAction(toggle_crosshair_action)
+
         # Language menu
         language_menu = menubar.addMenu(tr("language"))
         
@@ -4948,6 +4989,7 @@ class MainWindow(QMainWindow):
             "exit": exit_action,
             "fit_all": fit_all_action,
             "toggle_control_panel": toggle_control_panel_action,
+            "toggle_crosshair": toggle_crosshair_action,
             "about": about_action,
         }
         
@@ -5126,6 +5168,9 @@ class ViewerController(QObject):
             self.copy_screenshot_to_clipboard)
         self.view.actions["toggle_control_panel"].triggered.connect(
             self.toggle_control_panel
+        )
+        self.view.actions["toggle_crosshair"].triggered.connect(
+            self.toggle_crosshair
         )
         self.view.actions["about"].triggered.connect(self.show_about)
 
@@ -7027,6 +7072,9 @@ class ViewerController(QObject):
             self._clear_label_color_controls()
 
         for slice_view in self.view.slice_views.values():
+            # Store current crosshair visibility state
+            crosshair_visible = slice_view.crosshair_visible
+            
             slice_view.scene.clear()
             slice_view.pixmap_item = QGraphicsPixmapItem()
             slice_view.scene.addItem(slice_view.pixmap_item)
@@ -7040,8 +7088,12 @@ class ViewerController(QObject):
             slice_view.cross_v.setPen(crosshair_pen)
             slice_view.scene.addItem(slice_view.cross_h)
             slice_view.scene.addItem(slice_view.cross_v)
+            # Initially hide crosshairs, visibility will be restored to previous state
             slice_view.cross_h.setVisible(False)
             slice_view.cross_v.setVisible(False)
+            
+            # Restore crosshair visibility state
+            slice_view.crosshair_visible = crosshair_visible
 
         self.view.status_label.setText(tr("status_ready"))
 
@@ -7212,6 +7264,23 @@ class ViewerController(QObject):
             self.view.panel_toggle_btn.setToolTip(
                 tr("toggle_control_panel_tooltip"))
             self.view.actions["toggle_control_panel"].setChecked(True)
+
+    def toggle_crosshair(self) -> None:
+        """Toggle crosshair visibility in all slice views."""
+        if not hasattr(self.view, 'slice_views'):
+            return
+        
+        # Get current state from any slice view (they should all be in sync)
+        first_view = next(iter(self.view.slice_views.values()))
+        current_visible = first_view.crosshair_visible
+        new_visible = not current_visible
+        
+        # Update all slice views
+        for slice_view in self.view.slice_views.values():
+            slice_view.set_crosshair_visible(new_visible)
+        
+        # Update the menu action state
+        self.view.actions["toggle_crosshair"].setChecked(new_visible)
 
     def _reconnect_control_signals(self) -> None:
         """Reconnect control panel signals after recreating the dock."""

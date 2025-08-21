@@ -132,8 +132,9 @@ class TranslationManager:
                 "about_description": "A simple, fast viewer for medical images. View MRI scans, overlays, and segmentation masks in three perspectives simultaneously.",
                 "about_how_to_use": "How to Use",
                 "about_load_files": "<b>Load Files:</b> Use File menu → Load Image/Labels, or type paths in the right panel",
-                "about_navigate": "<b>Navigate:</b> Mouse wheel scrolls through slices, Ctrl+wheel zooms in/out",
+                "about_navigate": "<b>Navigate:</b> Mouse wheel scrolls through slices, Ctrl+wheel zooms in/out, Shift+wheel fast scroll",
                 "about_pan_rotate": "<b>Pan & Rotate:</b> Right-click drag to move view, click rotation buttons to flip",
+                "about_window_level": "<b>Window/Level:</b> Alt+Left drag to adjust contrast - horizontal=window, vertical=level",
                 "about_overlays": "<b>Overlays:</b> Check \"Show Overlay\" and adjust transparency slider",
                 "about_save": "<b>Save:</b> File → Save Screenshot (Ctrl+S) or Volume (Ctrl+Shift+S)",
                 "about_shortcuts": "Keyboard Shortcuts",
@@ -147,6 +148,7 @@ class TranslationManager:
                 "about_show_dialog": "Show this dialog",
                 "about_scroll_slices": "Scroll through slices",
                 "about_zoom": "Zoom in/out",
+                "about_alt_drag": "Adjust window/level contrast",
                 "about_pan_view": "Pan view",
                 "about_command_line": "Command Line Options",
                 "about_command_help": "Run <code>python nifti_viewer.py --help</code> for full options.<br>Examples: <code>-i image.mha -l labels.nii.gz</code>",
@@ -277,8 +279,9 @@ class TranslationManager:
                 "about_description": "简单快速的医学影像查看工具。支持查看磁共振(MRI)扫描图像、叠加图层和分割掩膜，同时显示三个角度的切面视图。",
                 "about_how_to_use": "如何使用",
                 "about_load_files": "<b>加载文件：</b>使用文件菜单 → 加载影像/标签，或在右侧面板输入文件路径",
-                "about_navigate": "<b>导航操作：</b>鼠标滚轮切换切片，Ctrl+滚轮缩放视图",
+                "about_navigate": "<b>导航操作：</b>鼠标滚轮切换切片，Ctrl+滚轮缩放视图，Shift+滚轮快速滚动",
                 "about_pan_rotate": "<b>平移旋转：</b>右键拖拽移动视图，点击旋转按钮翻转方向",
+                "about_window_level": "<b>窗宽窗位：</b>Alt+左键拖拽调节对比度 - 水平=窗宽，垂直=窗位",
                 "about_overlays": "<b>叠加显示：</b>勾选\"显示叠加\"并调节透明度滑条",
                 "about_save": "<b>保存：</b>文件 → 保存截图 (Ctrl+S) 或保存体数据 (Ctrl+Shift+S)",
                 "about_shortcuts": "快捷键一览",
@@ -292,6 +295,7 @@ class TranslationManager:
                 "about_show_dialog": "显示此对话框",
                 "about_scroll_slices": "切换切片",
                 "about_zoom": "缩放视图",
+                "about_alt_drag": "调节窗宽窗位对比度",
                 "about_pan_view": "平移视图",
                 "about_command_line": "命令行选项",
                 "about_command_help": "运行 <code>python nifti_viewer.py --help</code> 查看完整选项。<br>示例：<code>-i image.mha -l labels.nii.gz</code>",
@@ -422,8 +426,9 @@ class TranslationManager:
                 "about_description": "Une visionneuse simple et rapide pour les images médicales. Visualisez les examens IRM, les superpositions et les masques de segmentation dans trois perspectives simultanément.",
                 "about_how_to_use": "Comment l'Utiliser",
                 "about_load_files": "<b>Charger des Fichiers :</b> Utilisez le menu Fichier → Charger Image/Étiquettes, ou tapez les chemins dans le panneau de droite",
-                "about_navigate": "<b>Naviguer :</b> La molette de la souris fait défiler les coupes, Ctrl+molette zoome",
+                "about_navigate": "<b>Naviguer :</b> La molette de la souris fait défiler les coupes, Ctrl+molette zoome, Shift+molette défilement rapide",
                 "about_pan_rotate": "<b>Panoramique et Rotation :</b> Clic droit et glisser pour déplacer la vue, cliquez sur les boutons de rotation pour retourner",
+                "about_window_level": "<b>Fenêtre/Niveau :</b> Alt+Glissement gauche pour ajuster le contraste - horizontal=fenêtre, vertical=niveau",
                 "about_overlays": "<b>Superpositions :</b> Cochez \"Afficher la Superposition\" et ajustez le curseur de transparence",
                 "about_save": "<b>Enregistrer :</b> Fichier → Enregistrer Capture d'Écran (Ctrl+S) ou Volume (Ctrl+Shift+S)",
                 "about_shortcuts": "Raccourcis Clavier",
@@ -437,6 +442,7 @@ class TranslationManager:
                 "about_show_dialog": "Afficher cette boîte de dialogue",
                 "about_scroll_slices": "Faire défiler les coupes",
                 "about_zoom": "Zoomer/Dézoomer",
+                "about_alt_drag": "Ajuster fenêtre/niveau contraste",
                 "about_pan_view": "Panoramique de la vue",
                 "about_command_line": "Options de Ligne de Commande",
                 "about_command_help": "Exécutez <code>python nifti_viewer.py --help</code> pour les options complètes.<br>Exemples : <code>-i image.mha -l labels.nii.gz</code>",
@@ -3421,6 +3427,7 @@ class AboutDialog(QDialog):
             <tr><td style="padding: 4px;"><b>F1</b></td><td style="padding: 4px;">{tr("about_show_dialog")}</td></tr>
             <tr><td style="padding: 4px;"><b>Wheel</b></td><td style="padding: 4px;">{tr("about_scroll_slices")}</td></tr>
             <tr><td style="padding: 4px;"><b>Ctrl+Wheel</b></td><td style="padding: 4px;">{tr("about_zoom")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Alt+Left-drag</b></td><td style="padding: 4px;">{tr("about_alt_drag")}</td></tr>
             <tr><td style="padding: 4px;"><b>Right-drag</b></td><td style="padding: 4px;">{tr("about_pan_view")}</td></tr>
         </table>
         
@@ -4936,7 +4943,7 @@ class MainWindow(QMainWindow):
             if urls and urls[0].isLocalFile():
                 file_path = urls[0].toLocalFile().lower()
                 # Accept common medical image formats
-                if file_path.endswith(('.nii', '.nii.gz', '.mha', '.mhd', '.nrrd')):
+                if file_path.endswith(('.nii', '.nii.gz', '.mha', '.mhd')):
                     event.acceptProposedAction()
                     return
         event.ignore()
@@ -4986,8 +4993,8 @@ class MainWindow(QMainWindow):
         
         # Save current image path if one is loaded
         if (self.controller.model.image_data is not None and 
-            hasattr(self.controller.model, 'image_filepath')):
-            self._settings.setValue("last_image_path", self.controller.model.image_filepath)
+            self.controller.model.image_path):
+            self._settings.setValue("last_image_path", self.controller.model.image_path)
         
         super().closeEvent(event)
     
@@ -7216,6 +7223,9 @@ class ViewerController(QObject):
                 self.model.set_slice(name, mid_slice)
 
         self._update_all_views()
+        
+        # Apply default Window/Level preset to all views
+        self._apply_wl_preset("Default")
         
         # Initialize crosshair position to center of volume
         center_x, center_y, center_z = shape[0] // 2, shape[1] // 2, shape[2] // 2

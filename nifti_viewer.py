@@ -3499,6 +3499,9 @@ class SliceView(QGraphicsView):
 
         # Mouse tracking for tooltips
         self.setMouseTracking(True)
+        
+        # Enable drag and drop
+        self.setAcceptDrops(True)
 
         # Pan variables
         self._pan_start = QPointF()
@@ -4126,6 +4129,42 @@ class SliceView(QGraphicsView):
         self.cross_h.setVisible(True)
         self.cross_v.setVisible(True)
 
+    def dragEnterEvent(self, event):
+        """Handle drag enter events for file dropping."""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls and urls[0].isLocalFile():
+                file_path = urls[0].toLocalFile().lower()
+                # Accept common medical image formats
+                if file_path.endswith(('.nii', '.nii.gz', '.mha', '.mhd')):
+                    event.acceptProposedAction()
+                    return
+        event.ignore()
+
+    def dropEvent(self, event):
+        """Handle drop events for file loading."""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls and urls[0].isLocalFile():
+                file_path = urls[0].toLocalFile()
+                # Determine if this is a label file based on filename patterns
+                file_lower = file_path.lower()
+                if any(keyword in file_lower for keyword in ['label', 'seg', 'mask']):
+                    # Load as label through main window
+                    if hasattr(self, 'window') and callable(self.window):
+                        main_window = self.window()
+                        if hasattr(main_window, '_load_labels_from_path'):
+                            main_window._load_labels_from_path(file_path)
+                else:
+                    # Load as image through main window
+                    if hasattr(self, 'window') and callable(self.window):
+                        main_window = self.window()
+                        if hasattr(main_window, '_load_image_from_path'):
+                            main_window._load_image_from_path(file_path)
+                event.acceptProposedAction()
+                return
+        event.ignore()
+
 
 class MainWindow(QMainWindow):
     """
@@ -4439,7 +4478,7 @@ class MainWindow(QMainWindow):
         wl_label = QLabel("W/L Preset:")
         view_layout.addWidget(wl_label, 1, 0)
         self.wl_preset = QComboBox()
-        self.wl_preset.addItems(["Default", "Brain", "Abdomen", "Bone", "Auto (p2-p98)"])
+        self.wl_preset.addItems(["Min-Max (per-slice)", "Default", "Brain", "Abdomen", "Bone", "Auto (p2-p98)"])
         view_layout.addWidget(self.wl_preset, 1, 1, 1, 2)  # Span 2 columns
         
         view_group = create_collapsible_group(tr("view_controls"), view_layout)
@@ -7432,6 +7471,13 @@ class ViewerController(QObject):
 
     def _apply_wl_preset(self, preset_name: str) -> None:
         """Apply window/level preset to all views."""
+        if preset_name == "Min-Max (per-slice)":
+            # Disable W/L rendering and use original min-max normalization
+            for slice_view in self.view.slice_views.values():
+                slice_view._wl_active = False
+            self._update_all_views()
+            return
+            
         presets = {
             "Default": (400, 40),
             "Brain": (80, 40),
@@ -7459,8 +7505,10 @@ class ViewerController(QObject):
         for view_name in ['axial', 'sagittal', 'coronal']:
             config = self.model.view_configs.get(view_name)
             if config:
-                slice_data = self.model.get_slice_data(view_name, config["slice"])
-                if slice_data is not None:
+                axis = config["axis"]  # Use axis (int) instead of view_name (str)
+                slice_idx = config["slice"]
+                slice_data = self.model.get_slice_data(axis, slice_idx, is_label=False)
+                if slice_data is not None and slice_data.size > 0:
                     data_samples.append(slice_data.flatten())
         
         if data_samples:

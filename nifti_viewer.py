@@ -3493,6 +3493,19 @@ class SliceView(QGraphicsView):
         self._level = 40.0    # Default level center
         self._wl_dragging = False
         self._wl_last_pos = None
+        
+        # Crosshair lines for three-view navigation
+        self.cross_h = QGraphicsLineItem()  # Horizontal crosshair line
+        self.cross_v = QGraphicsLineItem()  # Vertical crosshair line
+        crosshair_pen = QPen(QColor(255, 255, 0), 1)  # Yellow crosshair
+        crosshair_pen.setCosmetic(True)  # Always 1 pixel width regardless of zoom
+        self.cross_h.setPen(crosshair_pen)
+        self.cross_v.setPen(crosshair_pen)
+        self.scene.addItem(self.cross_h)
+        self.scene.addItem(self.cross_v)
+        # Initially hide crosshairs until position is set
+        self.cross_h.setVisible(False)
+        self.cross_v.setVisible(False)
 
     def set_model(self, model: ImageModel) -> None:
         """Connect to data model."""
@@ -3596,6 +3609,27 @@ class SliceView(QGraphicsView):
         elif event.button() == Qt.LeftButton and self.measure_mode == "erase":
             # Delete measurement under cursor
             self._delete_measurement_under_cursor(event.position())
+        elif event.button() == Qt.LeftButton and self.measure_mode == "off":
+            # Crosshair navigation - update voxel position
+            img_pos = self.map_view_to_image_coords(event.position())
+            x, y = int(img_pos.x()), int(img_pos.y())
+            
+            # Convert 2D click to 3D voxel coordinates based on view orientation
+            if hasattr(self, "controller") and self.controller:
+                current_voxel = self.controller.voxel_idx.copy()
+                
+                if self.view_name == "axial":
+                    # Axial view: x,y click maps to voxel x,y; z stays current
+                    self.controller.set_voxel(x, y, current_voxel[2])
+                elif self.view_name == "sagittal":
+                    # Sagittal view: x,y click maps to voxel z,y; x stays current  
+                    self.controller.set_voxel(current_voxel[0], y, x)
+                elif self.view_name == "coronal":
+                    # Coronal view: x,y click maps to voxel x,z; y stays current
+                    self.controller.set_voxel(x, current_voxel[1], y)
+            
+            event.accept()
+            return
         else:
             super().mousePressEvent(event)
 
@@ -4033,6 +4067,46 @@ class SliceView(QGraphicsView):
         self._window = max(1.0, window)
         self._level = level
         self._update_current_slice_with_wl()
+
+    def _update_crosshair(self, voxel_idx: list) -> None:
+        """Update crosshair position based on voxel coordinates."""
+        if not self.pixmap_item.pixmap() or self.pixmap_item.pixmap().isNull():
+            self.cross_h.setVisible(False)
+            self.cross_v.setVisible(False)
+            return
+        
+        # Get image dimensions
+        width = self.pixmap_item.pixmap().width()
+        height = self.pixmap_item.pixmap().height()
+        
+        # Calculate crosshair position based on view orientation
+        if self.view_name == "axial":
+            # Axial view: crosshair at (voxel_x, voxel_y)
+            x, y = voxel_idx[0], voxel_idx[1]
+        elif self.view_name == "sagittal":
+            # Sagittal view: crosshair at (voxel_z, voxel_y)
+            x, y = voxel_idx[2], voxel_idx[1]
+        elif self.view_name == "coronal":
+            # Coronal view: crosshair at (voxel_x, voxel_z)
+            x, y = voxel_idx[0], voxel_idx[2]
+        else:
+            return
+        
+        # Clamp to image bounds
+        x = max(0, min(x, width - 1))
+        y = max(0, min(y, height - 1))
+        
+        # Position crosshair lines (accounting for Y-flip in display)
+        display_y = height - 1 - y
+        
+        # Horizontal line (spans full width)
+        self.cross_h.setLine(0, display_y, width, display_y)
+        # Vertical line (spans full height)
+        self.cross_v.setLine(x, 0, x, height)
+        
+        # Make crosshairs visible
+        self.cross_h.setVisible(True)
+        self.cross_v.setVisible(True)
 
 
 class MainWindow(QMainWindow):
@@ -4932,6 +5006,9 @@ class ViewerController(QObject):
         self.preload_thread_pool.setMaxThreadCount(2)  # Limit preload threads
         self.preload_count = preload_count
         self.default_output_path = None
+
+        # Crosshair position for synchronized navigation
+        self.voxel_idx = [0, 0, 0]  # Current voxel position [x, y, z]
 
         # Anti-bounce timer for smooth interactions
         self.update_timer = QTimer()
@@ -7121,6 +7198,15 @@ class ViewerController(QObject):
                 self.model.set_slice(name, mid_slice)
 
         self._update_all_views()
+        
+        # Initialize crosshair position to center of volume
+        center_x, center_y, center_z = shape[0] // 2, shape[1] // 2, shape[2] // 2
+        self.voxel_idx = [center_x, center_y, center_z]
+        
+        # Update crosshairs in all views
+        for view_name, slice_view in self.view.slice_views.items():
+            if hasattr(slice_view, '_update_crosshair'):
+                slice_view._update_crosshair(self.voxel_idx)
 
     def _on_labels_loaded(self, filepath: str, unique_count: int) -> None:
         """Handle successful label loading."""
@@ -7420,6 +7506,47 @@ class ViewerController(QObject):
 
         # Collapse the group
         self.view.label_colors_group.setChecked(False)
+
+    def set_voxel(self, x: int, y: int, z: int) -> None:
+        """Set crosshair voxel position and update all views."""
+        if self.model.image_data is None:
+            return
+        
+        # Clamp coordinates to image bounds
+        shape = self.model.image_data.shape[:3]
+        self.voxel_idx = [
+            int(np.clip(x, 0, shape[0] - 1)),
+            int(np.clip(y, 0, shape[1] - 1)), 
+            int(np.clip(z, 0, shape[2] - 1))
+        ]
+        
+        # Update slice positions based on voxel coordinates
+        # Axial view shows slice at z coordinate
+        self.model.set_slice("axial", self.voxel_idx[2])
+        # Sagittal view shows slice at x coordinate  
+        self.model.set_slice("sagittal", self.voxel_idx[0])
+        # Coronal view shows slice at y coordinate
+        self.model.set_slice("coronal", self.voxel_idx[1])
+        
+        # Update UI controls if they exist
+        if hasattr(self.view, "slice_controls"):
+            for view_name, axis_idx in [("axial", 2), ("sagittal", 0), ("coronal", 1)]:
+                if view_name in self.view.slice_controls:
+                    controls = self.view.slice_controls[view_name]
+                    slice_idx = self.voxel_idx[axis_idx]
+                    controls["slider"].setValue(slice_idx)
+                    controls["spinbox"].setValue(slice_idx)
+        
+        # Update all views with crosshairs
+        self._update_all_views_with_crosshairs()
+
+    def _update_all_views_with_crosshairs(self) -> None:
+        """Update all views and their crosshairs."""
+        self._update_all_views()
+        # Update crosshairs in each view
+        for view_name, slice_view in self.view.slice_views.items():
+            if hasattr(slice_view, '_update_crosshair'):
+                slice_view._update_crosshair(self.voxel_idx)
 
     def _update_all_views(self) -> None:
         """Update all visible slice views."""

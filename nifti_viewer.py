@@ -3509,6 +3509,7 @@ class SliceView(QGraphicsView):
         self._level = 40.0    # Default level center
         self._wl_dragging = False
         self._wl_last_pos = None
+        self._wl_active = False  # Track if W/L rendering is enabled
         
         # Crosshair lines for three-view navigation
         self.cross_h = QGraphicsLineItem()  # Horizontal crosshair line
@@ -4082,6 +4083,7 @@ class SliceView(QGraphicsView):
         """Set window/level values and update display."""
         self._window = max(1.0, window)
         self._level = level
+        self._wl_active = True  # Enable W/L rendering
         self._update_current_slice_with_wl()
 
     def _update_crosshair(self, voxel_idx: list) -> None:
@@ -4437,7 +4439,7 @@ class MainWindow(QMainWindow):
         wl_label = QLabel("W/L Preset:")
         view_layout.addWidget(wl_label, 1, 0)
         self.wl_preset = QComboBox()
-        self.wl_preset.addItems(["Default", "Brain", "Abdomen", "Bone"])
+        self.wl_preset.addItems(["Default", "Brain", "Abdomen", "Bone", "Auto (p2-p98)"])
         view_layout.addWidget(self.wl_preset, 1, 1, 1, 2)  # Span 2 columns
         
         view_group = create_collapsible_group(tr("view_controls"), view_layout)
@@ -6989,6 +6991,18 @@ class ViewerController(QObject):
             slice_view.scene.clear()
             slice_view.pixmap_item = QGraphicsPixmapItem()
             slice_view.scene.addItem(slice_view.pixmap_item)
+            
+            # Recreate crosshair lines (scene.clear() deleted them)
+            slice_view.cross_h = QGraphicsLineItem()
+            slice_view.cross_v = QGraphicsLineItem()
+            crosshair_pen = QPen(QColor(255, 255, 0), 1)
+            crosshair_pen.setCosmetic(True)
+            slice_view.cross_h.setPen(crosshair_pen)
+            slice_view.cross_v.setPen(crosshair_pen)
+            slice_view.scene.addItem(slice_view.cross_h)
+            slice_view.scene.addItem(slice_view.cross_v)
+            slice_view.cross_h.setVisible(False)
+            slice_view.cross_v.setVisible(False)
 
         self.view.status_label.setText(tr("status_ready"))
 
@@ -7423,10 +7437,42 @@ class ViewerController(QObject):
             "Brain": (80, 40),
             "Abdomen": (350, 50),
             "Bone": (2000, 500),
+            "Auto (p2-p98)": None,  # Special handling for auto calculation
         }
         
-        if preset_name in presets:
+        if preset_name == "Auto (p2-p98)":
+            # Calculate auto window/level based on current data percentiles
+            self._apply_auto_window_level()
+        elif preset_name in presets:
             window, level = presets[preset_name]
+            # Apply to all slice views
+            for slice_view in self.view.slice_views.values():
+                slice_view.set_window_level(float(window), float(level))
+
+    def _apply_auto_window_level(self) -> None:
+        """Calculate and apply automatic window/level based on data percentiles."""
+        if self.model.image_data is None:
+            return
+            
+        # Get current slice data for all views to calculate percentiles
+        data_samples = []
+        for view_name in ['axial', 'sagittal', 'coronal']:
+            config = self.model.view_configs.get(view_name)
+            if config:
+                slice_data = self.model.get_slice_data(view_name, config["slice"])
+                if slice_data is not None:
+                    data_samples.append(slice_data.flatten())
+        
+        if data_samples:
+            # Combine all slice data
+            combined_data = np.concatenate(data_samples)
+            # Calculate percentiles (p2 and p98 to avoid extreme outliers)
+            p2, p98 = np.percentile(combined_data, [2, 98])
+            
+            # Calculate window and level
+            window = max(1.0, p98 - p2)  # Ensure minimum window of 1
+            level = (p98 + p2) / 2
+            
             # Apply to all slice views
             for slice_view in self.view.slice_views.values():
                 slice_view.set_window_level(float(window), float(level))
@@ -7669,12 +7715,19 @@ class ViewerController(QObject):
         show_overlay = config["overlay"] and self.model.global_overlay
         alpha = config["alpha"]
 
-        # Render slice
-        qimage = self.model.render_slice(
-            view_name, slice_idx, show_overlay, alpha)
+        # Check if this view has W/L active and render accordingly
+        slice_view = self.view.slice_views[view_name]
+        if getattr(slice_view, "_wl_active", False):
+            qimage = self.model.render_slice_with_wl(
+                view_name, slice_idx, slice_view._window, slice_view._level,
+                show_overlay=show_overlay, alpha=alpha
+            )
+        else:
+            # Render slice normally
+            qimage = self.model.render_slice(
+                view_name, slice_idx, show_overlay, alpha)
 
         # Update view with rotation
-        slice_view = self.view.slice_views[view_name]
         rotation = config["rotation"]
         slice_view.set_image(qimage, rotation)
 

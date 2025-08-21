@@ -1864,6 +1864,7 @@ class ImageModel(QObject):
         # Dynamic color mapping: label_value -> (r, g, b) tuple
         self._custom_label_colors = {}  # User customizations
         self._current_label_values = []  # Currently loaded label values
+        self.active_labels = set()  # Currently visible label values for overlay
 
         # Fixed overlay transparency for clinical consistency
         self._overlay_alpha = 0.4
@@ -1970,7 +1971,7 @@ class ImageModel(QObject):
 
         # Apply colors for each label using vectorized operations
         for label_val in unique_labels:
-            if label_val > 0:  # Skip background
+            if label_val > 0 and label_val in self.active_labels:  # Only render active labels
                 label_mask = labels == label_val
                 color = self.get_label_color(label_val)
                 overlay[label_mask] = color
@@ -4510,6 +4511,16 @@ class MainWindow(QMainWindow):
         self.reset_colors_btn = QPushButton(tr("reset_to_defaults"))
         self.reset_colors_btn.setEnabled(False)
         self.label_colors_layout.addWidget(self.reset_colors_btn)
+        
+        # Label legend with visibility checkboxes
+        legend_label = QLabel("Label Visibility:")
+        legend_label.setStyleSheet("font-weight: bold; margin-top: 8px;")
+        self.label_colors_layout.addWidget(legend_label)
+        
+        self.label_legend_list = QListWidget()
+        self.label_legend_list.setMaximumHeight(120)
+        self.label_legend_list.setVisible(False)  # Initially hidden
+        self.label_colors_layout.addWidget(self.label_legend_list)
 
         self.label_colors_group = create_collapsible_group(
             tr("label_colors"), self.label_colors_layout
@@ -5009,6 +5020,9 @@ class ViewerController(QObject):
 
         # Crosshair position for synchronized navigation
         self.voxel_idx = [0, 0, 0]  # Current voxel position [x, y, z]
+        
+        # Label visibility control
+        self.active_labels = set()  # Set of currently visible label values
 
         # Anti-bounce timer for smooth interactions
         self.update_timer = QTimer()
@@ -5098,6 +5112,10 @@ class ViewerController(QObject):
         # Window/Level preset
         if hasattr(self.view, 'wl_preset'):
             self.view.wl_preset.currentTextChanged.connect(self._apply_wl_preset)
+        
+        # Label legend visibility checkboxes
+        if hasattr(self.view, 'label_legend_list'):
+            self.view.label_legend_list.itemChanged.connect(self._on_label_visibility_changed)
 
     def setup_slice_view_connections(self) -> None:
         """Connect slice view signals."""
@@ -7216,6 +7234,9 @@ class ViewerController(QObject):
 
         # Auto-generate distinguishable colors for labels
         self._generate_label_colormap()
+        
+        # Populate label legend with visibility controls
+        self._populate_label_legend()
 
         # Update control panel elements if they exist
         if hasattr(self.view, "control_dock") and self.view.control_dock is not None:
@@ -7391,6 +7412,72 @@ class ViewerController(QObject):
             # Apply to all slice views
             for slice_view in self.view.slice_views.values():
                 slice_view.set_window_level(float(window), float(level))
+
+    def _on_label_visibility_changed(self, item) -> None:
+        """Handle changes in label visibility checkboxes."""
+        label_value = item.data(Qt.UserRole)
+        if label_value is not None:
+            if item.checkState() == Qt.Checked:
+                self.active_labels.add(label_value)
+            else:
+                self.active_labels.discard(label_value)
+            
+            # Sync with model
+            self.model.active_labels = self.active_labels.copy()
+            
+            # Update overlay rendering
+            self._update_all_views()
+
+    def _populate_label_legend(self) -> None:
+        """Populate the label legend with visibility checkboxes."""
+        if not hasattr(self.view, 'label_legend_list'):
+            return
+        
+        # Clear existing items
+        self.view.label_legend_list.clear()
+        
+        # Get unique label values
+        if self.model.label_data is None:
+            self.view.label_legend_list.setVisible(False)
+            return
+        
+        unique_labels = np.unique(self.model.label_data)
+        label_values = [int(v) for v in unique_labels if v != 0]
+        
+        if not label_values:
+            self.view.label_legend_list.setVisible(False)
+            return
+        
+        # Initially, all labels are active
+        self.active_labels = set(label_values)
+        self.model.active_labels = self.active_labels.copy()
+        
+        # Create list items with checkboxes
+        for label_val in sorted(label_values):
+            # Get label color
+            color = self.model.get_label_color(label_val)
+            color_hex = f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}"
+            
+            # Create list item
+            item_text = f"Label {label_val}"
+            item = QListWidgetItem(item_text)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked)  # Initially all visible
+            item.setData(Qt.UserRole, label_val)
+            
+            # Set color indicator
+            item.setBackground(QColor(color[0], color[1], color[2], 100))  # Semi-transparent background
+            
+            self.view.label_legend_list.addItem(item)
+        
+        # Show the legend
+        self.view.label_legend_list.setVisible(True)
+
+    def set_active_labels(self, active_set: set) -> None:
+        """Set which labels should be visible in overlays."""
+        self.active_labels = active_set
+        self.model.active_labels = self.active_labels.copy()
+        self._update_all_views()
 
     def _populate_label_color_controls(self) -> None:
         """Populate the label color controls based on current label data."""

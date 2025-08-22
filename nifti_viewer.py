@@ -7,13 +7,14 @@ A medical image viewer for NIfTI and MHA format files.
 import time
 import dataclasses
 import csv
-__version__ = "0.1.5"
+__version__ = "0.1.6"
 __author__ = "Steven Chen"
 __license__ = "MIT"
 __copyright__ = "Copyright 2025, Steven Chen"
 __all__ = ["MainWindow", "ViewerController", "ImageModel", "main"]
 
 import argparse
+import colorsys
 import logging
 import os
 import sys
@@ -36,7 +37,7 @@ except ImportError:
     SITK_AVAILABLE = False
 
 from PySide6.QtCore import (QLine, QLineF, QObject, QPoint, QPointF, QRect,
-                            QRectF, QRunnable, QSize, Qt, QThread, QThreadPool,
+                            QRectF, QRunnable, QSettings, QSize, Qt, QThread, QThreadPool,
                             QTimer, Signal)
 from PySide6.QtGui import (QAction, QActionGroup, QBrush, QColor, QCursor, QFont,
                            QFontMetricsF, QIcon, QImage, QMouseEvent, QPainter,
@@ -87,6 +88,7 @@ class TranslationManager:
                 "exit": "Exit",
                 "fit_all_views": "Fit All Views",
                 "toggle_control_panel": "Toggle Control Panel",
+                "toggle_crosshair": "Show Crosshair",
                 "about": "About...",
                 "language": "Language",
                 
@@ -131,21 +133,25 @@ class TranslationManager:
                 "about_description": "A simple, fast viewer for medical images. View MRI scans, overlays, and segmentation masks in three perspectives simultaneously.",
                 "about_how_to_use": "How to Use",
                 "about_load_files": "<b>Load Files:</b> Use File menu → Load Image/Labels, or type paths in the right panel",
-                "about_navigate": "<b>Navigate:</b> Mouse wheel scrolls through slices, Ctrl+wheel zooms in/out",
+                "about_navigate": "<b>Navigate:</b> Mouse wheel scrolls through slices, Ctrl+wheel zooms in/out, Shift+wheel fast scroll",
                 "about_pan_rotate": "<b>Pan & Rotate:</b> Right-click drag to move view, click rotation buttons to flip",
+                "about_window_level": "<b>Window/Level:</b> Alt+Left drag to adjust contrast - horizontal=window, vertical=level",
                 "about_overlays": "<b>Overlays:</b> Check \"Show Overlay\" and adjust transparency slider",
                 "about_save": "<b>Save:</b> File → Save Screenshot (Ctrl+S) or Volume (Ctrl+Shift+S)",
                 "about_shortcuts": "Keyboard Shortcuts",
                 "about_open_image": "Open image file",
                 "about_open_labels": "Open label file",
                 "about_save_screenshot": "Save screenshot",
+                "about_copy_screenshot": "Copy screenshot to clipboard",
                 "about_save_volume": "Open volume save menu",
                 "about_reset": "Reset views and clear cache",
                 "about_toggle_panel": "Toggle control panel",
                 "about_fit_views": "Fit all views to window",
                 "about_show_dialog": "Show this dialog",
                 "about_scroll_slices": "Scroll through slices",
+                "about_shift_scroll": "Fast scroll through slices",
                 "about_zoom": "Zoom in/out",
+                "about_alt_drag": "Adjust window/level contrast",
                 "about_pan_view": "Pan view",
                 "about_command_line": "Command Line Options",
                 "about_command_help": "Run <code>python nifti_viewer.py --help</code> for full options.<br>Examples: <code>-i image.mha -l labels.nii.gz</code>",
@@ -232,6 +238,7 @@ class TranslationManager:
                 "exit": "退出",
                 "fit_all_views": "适应所有视图",
                 "toggle_control_panel": "切换控制面板",
+                "toggle_crosshair": "显示十字光标",
                 "about": "关于...",
                 "language": "语言",
                 
@@ -276,21 +283,25 @@ class TranslationManager:
                 "about_description": "简单快速的医学影像查看工具。支持查看磁共振(MRI)扫描图像、叠加图层和分割掩膜，同时显示三个角度的切面视图。",
                 "about_how_to_use": "如何使用",
                 "about_load_files": "<b>加载文件：</b>使用文件菜单 → 加载影像/标签，或在右侧面板输入文件路径",
-                "about_navigate": "<b>导航操作：</b>鼠标滚轮切换切片，Ctrl+滚轮缩放视图",
+                "about_navigate": "<b>导航操作：</b>鼠标滚轮切换切片，Ctrl+滚轮缩放视图，Shift+滚轮快速滚动",
                 "about_pan_rotate": "<b>平移旋转：</b>右键拖拽移动视图，点击旋转按钮翻转方向",
+                "about_window_level": "<b>窗宽窗位：</b>Alt+左键拖拽调节对比度 - 水平=窗宽，垂直=窗位",
                 "about_overlays": "<b>叠加显示：</b>勾选\"显示叠加\"并调节透明度滑条",
                 "about_save": "<b>保存：</b>文件 → 保存截图 (Ctrl+S) 或保存体数据 (Ctrl+Shift+S)",
                 "about_shortcuts": "快捷键一览",
                 "about_open_image": "打开影像文件",
                 "about_open_labels": "打开标签文件",
                 "about_save_screenshot": "保存截图",
+                "about_copy_screenshot": "复制截图到剪贴板",
                 "about_save_volume": "打开体数据保存菜单",
                 "about_reset": "重置视图并清空缓存",
                 "about_toggle_panel": "切换控制面板显示",
                 "about_fit_views": "适应所有视图到窗口",
                 "about_show_dialog": "显示此对话框",
                 "about_scroll_slices": "切换切片",
+                "about_shift_scroll": "快速切换切片",
                 "about_zoom": "缩放视图",
+                "about_alt_drag": "调节窗宽窗位对比度",
                 "about_pan_view": "平移视图",
                 "about_command_line": "命令行选项",
                 "about_command_help": "运行 <code>python nifti_viewer.py --help</code> 查看完整选项。<br>示例：<code>-i image.mha -l labels.nii.gz</code>",
@@ -377,6 +388,7 @@ class TranslationManager:
                 "exit": "Quitter",
                 "fit_all_views": "Ajuster Toutes les Vues",
                 "toggle_control_panel": "Basculer le Panneau de Contrôle",
+                "toggle_crosshair": "Afficher le Réticule",
                 "about": "À propos...",
                 "language": "Langue",
                 
@@ -421,21 +433,25 @@ class TranslationManager:
                 "about_description": "Une visionneuse simple et rapide pour les images médicales. Visualisez les examens IRM, les superpositions et les masques de segmentation dans trois perspectives simultanément.",
                 "about_how_to_use": "Comment l'Utiliser",
                 "about_load_files": "<b>Charger des Fichiers :</b> Utilisez le menu Fichier → Charger Image/Étiquettes, ou tapez les chemins dans le panneau de droite",
-                "about_navigate": "<b>Naviguer :</b> La molette de la souris fait défiler les coupes, Ctrl+molette zoome",
+                "about_navigate": "<b>Naviguer :</b> La molette de la souris fait défiler les coupes, Ctrl+molette zoome, Shift+molette défilement rapide",
                 "about_pan_rotate": "<b>Panoramique et Rotation :</b> Clic droit et glisser pour déplacer la vue, cliquez sur les boutons de rotation pour retourner",
+                "about_window_level": "<b>Fenêtre/Niveau :</b> Alt+Glissement gauche pour ajuster le contraste - horizontal=fenêtre, vertical=niveau",
                 "about_overlays": "<b>Superpositions :</b> Cochez \"Afficher la Superposition\" et ajustez le curseur de transparence",
                 "about_save": "<b>Enregistrer :</b> Fichier → Enregistrer Capture d'Écran (Ctrl+S) ou Volume (Ctrl+Shift+S)",
                 "about_shortcuts": "Raccourcis Clavier",
                 "about_open_image": "Ouvrir un fichier image",
                 "about_open_labels": "Ouvrir un fichier d'étiquettes",
                 "about_save_screenshot": "Enregistrer capture d'écran",
+                "about_copy_screenshot": "Copier capture d'écran dans le presse-papiers",
                 "about_save_volume": "Ouvrir le menu d'enregistrement de volume",
                 "about_reset": "Réinitialiser les vues et vider le cache",
                 "about_toggle_panel": "Basculer le panneau de contrôle",
                 "about_fit_views": "Ajuster toutes les vues à la fenêtre",
                 "about_show_dialog": "Afficher cette boîte de dialogue",
                 "about_scroll_slices": "Faire défiler les coupes",
+                "about_shift_scroll": "Défilement rapide des coupes",
                 "about_zoom": "Zoomer/Dézoomer",
+                "about_alt_drag": "Ajuster fenêtre/niveau contraste",
                 "about_pan_view": "Panoramique de la vue",
                 "about_command_line": "Options de Ligne de Commande",
                 "about_command_help": "Exécutez <code>python nifti_viewer.py --help</code> pour les options complètes.<br>Exemples : <code>-i image.mha -l labels.nii.gz</code>",
@@ -522,6 +538,7 @@ class TranslationManager:
                 "exit": "Beenden",
                 "fit_all_views": "Alle Ansichten anpassen",
                 "toggle_control_panel": "Kontrollpanel umschalten",
+                "toggle_crosshair": "Fadenkreuz anzeigen",
                 "about": "Über...",
                 "language": "Sprache",
                 
@@ -667,6 +684,7 @@ class TranslationManager:
                 "exit": "終了",
                 "fit_all_views": "すべてのビューに合わせる",
                 "toggle_control_panel": "コントロールパネルの切り替え",
+                "toggle_crosshair": "十字線を表示",
                 "about": "について...",
                 "language": "言語",
                 
@@ -812,6 +830,7 @@ class TranslationManager:
                 "exit": "종료",
                 "fit_all_views": "모든 뷰에 맞춤",
                 "toggle_control_panel": "제어판 토글",
+                "toggle_crosshair": "십자선 표시",
                 "about": "정보...",
                 "language": "언어",
                 
@@ -957,6 +976,7 @@ class TranslationManager:
                 "exit": "Salir",
                 "fit_all_views": "Ajustar Todas las Vistas",
                 "toggle_control_panel": "Alternar Panel de Control",
+                "toggle_crosshair": "Mostrar Cruz",
                 "about": "Acerca de...",
                 "language": "Idioma",
                 
@@ -1102,6 +1122,7 @@ class TranslationManager:
                 "exit": "結束",
                 "fit_all_views": "適應所有檢視",
                 "toggle_control_panel": "切換控制面板",
+                "toggle_crosshair": "顯示十字線",
                 "about": "關於...",
                 "language": "語言",
                 
@@ -1247,6 +1268,7 @@ class TranslationManager:
                 "exit": "Esci",
                 "fit_all_views": "Adatta Tutte le Viste",
                 "toggle_control_panel": "Attiva/Disattiva Pannello di Controllo",
+                "toggle_crosshair": "Mostra Mirino",
                 "about": "Informazioni...",
                 "language": "Lingua",
                 
@@ -1392,6 +1414,7 @@ class TranslationManager:
                 "exit": "Sair",
                 "fit_all_views": "Ajustar Todas as Visualizações",
                 "toggle_control_panel": "Alternar Painel de Controle",
+                "toggle_crosshair": "Mostrar Cruz",
                 "about": "Sobre...",
                 "language": "Idioma",
                 
@@ -1537,6 +1560,7 @@ class TranslationManager:
                 "exit": "Выход",
                 "fit_all_views": "Подогнать Все Виды",
                 "toggle_control_panel": "Переключить Панель Управления",
+                "toggle_crosshair": "Показать Перекрестие",
                 "about": "О программе...",
                 "language": "Язык",
                 
@@ -1863,6 +1887,7 @@ class ImageModel(QObject):
         # Dynamic color mapping: label_value -> (r, g, b) tuple
         self._custom_label_colors = {}  # User customizations
         self._current_label_values = []  # Currently loaded label values
+        self.active_labels = set()  # Currently visible label values for overlay
 
         # Fixed overlay transparency for clinical consistency
         self._overlay_alpha = 0.4
@@ -1969,7 +1994,7 @@ class ImageModel(QObject):
 
         # Apply colors for each label using vectorized operations
         for label_val in unique_labels:
-            if label_val > 0:  # Skip background
+            if label_val > 0 and label_val in self.active_labels:  # Only render active labels
                 label_mask = labels == label_val
                 color = self.get_label_color(label_val)
                 overlay[label_mask] = color
@@ -2063,6 +2088,20 @@ class ImageModel(QObject):
             view_name, slice_idx, show_overlay and self.global_overlay, alpha
         )
 
+    def render_slice_with_wl(
+        self,
+        view_name: str,
+        slice_idx: int,
+        window: float,
+        level: float,
+        show_overlay: bool = True,
+        alpha: float = 0.5,
+    ) -> QImage:
+        """Render slice with specific window/level values."""
+        return self._render_slice_wl_cached(
+            view_name, slice_idx, window, level, show_overlay and self.global_overlay, alpha
+        )
+
     @lru_cache(maxsize=100)
     def _render_slice_cached(
         self, view_name: str, slice_idx: int, show_overlay: bool, alpha: float
@@ -2135,6 +2174,81 @@ class ImageModel(QObject):
 
         # Don't apply rotation to QImage - let pixmap handle rotation transform
         return qimage
+
+    @lru_cache(maxsize=100)
+    def _render_slice_wl_cached(
+        self, view_name: str, slice_idx: int, window: float, level: float, 
+        show_overlay: bool, alpha: float
+    ) -> QImage:
+        """Internal slice renderer with window/level that is LRU cached."""
+        config = self.view_configs[view_name]
+        axis = config["axis"]
+
+        img_slice = self.get_slice_data(axis, slice_idx, False)
+        if img_slice.size == 0:
+            return QImage()
+
+        # Apply window/level before normalization
+        img_wl = self._apply_window_level(img_slice, window, level)
+
+        # Handle overlay if available
+        has_overlay = (
+            show_overlay
+            and self.label_data is not None
+            and self.get_slice_data(axis, slice_idx, True).size > 0
+        )
+
+        if has_overlay:
+            label_slice = self.get_slice_data(axis, slice_idx, True)
+            overlay = self.create_label_overlay(label_slice)
+            if overlay is not None:
+                # Medical-grade alpha blending with ColorBrewer Paired colors
+                img_rgb = np.stack([img_wl] * 3, axis=-1)
+                mask = overlay.sum(axis=-1) > 0
+                img_rgb[mask] = (
+                    (1 - alpha) * img_rgb[mask] + alpha * overlay[mask]
+                ).astype(np.uint8)
+                
+                img_flipped = np.flipud(img_rgb)
+                img_flipped = np.ascontiguousarray(img_flipped)
+                height, width, _ = img_rgb.shape
+                bytes_per_line = 3 * width
+                qimage = QImage(
+                    img_flipped.copy().data,
+                    width,
+                    height,
+                    bytes_per_line,
+                    QImage.Format_RGB888,
+                )
+            else:
+                has_overlay = False
+
+        if not has_overlay:
+            # Use efficient grayscale format
+            img_flipped = np.flipud(img_wl)
+            img_flipped = np.ascontiguousarray(img_flipped)
+            height, width = img_flipped.shape
+            qimage = QImage(
+                img_flipped.copy().data,
+                width,
+                height,
+                img_flipped.strides[0],
+                QImage.Format_Grayscale8,
+            )
+
+        return qimage
+
+    def _apply_window_level(self, img_slice: np.ndarray, window: float, level: float) -> np.ndarray:
+        """Apply window/level to image slice and return as uint8."""
+        # Calculate window bounds
+        w_min = level - window / 2.0
+        w_max = level + window / 2.0
+        
+        # Apply window/level mapping
+        img_clipped = np.clip((img_slice - w_min) / (w_max - w_min), 0, 1)
+        
+        # Convert to uint8
+        return (img_clipped * 255).astype(np.uint8)
 
     def load_image(self, filepath: str) -> None:
         """Load medical image data."""
@@ -2995,7 +3109,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
 
         # Version info
-        version_label = QLabel("Version 0.1.5")
+        version_label = QLabel("Version 0.16.0")
         version_label.setStyleSheet(
             "font-size: 14px; color: #ccc; margin-bottom: 15px;"
         )
@@ -3067,7 +3181,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
 
         # Version info
-        version_label = QLabel("版本 0.1.5")
+        version_label = QLabel("版本 0.16.0")
         version_label.setStyleSheet(
             "font-size: 14px; color: #ccc; margin-bottom: 15px;"
         )
@@ -3139,7 +3253,7 @@ class AboutDialog(QDialog):
         layout.addWidget(title_label)
 
         # Version info
-        version_label = QLabel("Version 0.1.5")
+        version_label = QLabel("Version 0.16.0")
         version_label.setStyleSheet(
             "font-size: 14px; color: #ccc; margin-bottom: 15px;"
         )
@@ -3292,7 +3406,7 @@ class AboutDialog(QDialog):
         self.other_content_layout.addWidget(title_label)
 
         # Version info
-        version_label = QLabel("Version 0.1.5")
+        version_label = QLabel("Version 0.16.0")
         version_label.setStyleSheet(
             "font-size: 14px; color: #ccc; margin-bottom: 15px;"
         )
@@ -3323,13 +3437,16 @@ class AboutDialog(QDialog):
             <tr><td style="padding: 4px;"><b>Ctrl+O</b></td><td style="padding: 4px;">{tr("about_open_image")}</td></tr>
             <tr><td style="padding: 4px;"><b>Ctrl+L</b></td><td style="padding: 4px;">{tr("about_open_labels")}</td></tr>
             <tr><td style="padding: 4px;"><b>Ctrl+S</b></td><td style="padding: 4px;">{tr("about_save_screenshot")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Ctrl+Shift+C</b></td><td style="padding: 4px;">{tr("about_copy_screenshot")}</td></tr>
             <tr><td style="padding: 4px;"><b>Ctrl+Shift+S</b></td><td style="padding: 4px;">{tr("about_save_volume")}</td></tr>
             <tr><td style="padding: 4px;"><b>Ctrl+R</b></td><td style="padding: 4px;">{tr("about_reset")}</td></tr>
             <tr><td style="padding: 4px;"><b>Ctrl+T</b></td><td style="padding: 4px;">{tr("about_toggle_panel")}</td></tr>
             <tr><td style="padding: 4px;"><b>F</b></td><td style="padding: 4px;">{tr("about_fit_views")}</td></tr>
             <tr><td style="padding: 4px;"><b>F1</b></td><td style="padding: 4px;">{tr("about_show_dialog")}</td></tr>
             <tr><td style="padding: 4px;"><b>Wheel</b></td><td style="padding: 4px;">{tr("about_scroll_slices")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Shift+Wheel</b></td><td style="padding: 4px;">{tr("about_shift_scroll")}</td></tr>
             <tr><td style="padding: 4px;"><b>Ctrl+Wheel</b></td><td style="padding: 4px;">{tr("about_zoom")}</td></tr>
+            <tr><td style="padding: 4px;"><b>Alt+Left-drag</b></td><td style="padding: 4px;">{tr("about_alt_drag")}</td></tr>
             <tr><td style="padding: 4px;"><b>Right-drag</b></td><td style="padding: 4px;">{tr("about_pan_view")}</td></tr>
         </table>
         
@@ -3393,10 +3510,38 @@ class SliceView(QGraphicsView):
 
         # Mouse tracking for tooltips
         self.setMouseTracking(True)
+        
+        # Enable drag and drop
+        self.setAcceptDrops(True)
+        # Let internal viewport also accept drops and forward events to this SliceView
+        self.viewport().setAcceptDrops(True)
+        self.viewport().installEventFilter(self)
 
         # Pan variables
         self._pan_start = QPointF()
         self._panning = False
+        
+        # Window/Level variables for medical image display
+        self._window = 400.0  # Default window width
+        self._level = 40.0    # Default level center
+        self._wl_dragging = False
+        self._wl_last_pos = None
+        self._wl_active = False  # Track if W/L rendering is enabled
+        
+        # Crosshair lines for three-view navigation
+        self.cross_h = QGraphicsLineItem()  # Horizontal crosshair line
+        self.cross_v = QGraphicsLineItem()  # Vertical crosshair line
+        crosshair_pen = QPen(QColor(255, 255, 0), 1)  # Yellow crosshair
+        crosshair_pen.setCosmetic(True)  # Always 1 pixel width regardless of zoom
+        self.cross_h.setPen(crosshair_pen)
+        self.cross_v.setPen(crosshair_pen)
+        self.scene.addItem(self.cross_h)
+        self.scene.addItem(self.cross_v)
+        # Initially hide crosshairs until position is set
+        self.cross_h.setVisible(False)
+        self.cross_v.setVisible(False)
+        # Crosshair visibility state
+        self.crosshair_visible = True
 
     def set_model(self, model: ImageModel) -> None:
         """Connect to data model."""
@@ -3454,14 +3599,23 @@ class SliceView(QGraphicsView):
                     )
         else:
             # Slice navigation with plain wheel
-            delta = 1 if event.angleDelta().y() > 0 else -1
+            # Check for Shift modifier to accelerate (×10 step)
+            step_multiplier = 10 if modifiers & Qt.ShiftModifier else 1
+            delta = step_multiplier if event.angleDelta().y() > 0 else -step_multiplier
             self.wheelScrolled.emit(delta)
 
         event.accept()
 
     def mousePressEvent(self, event: QMouseEvent):
-        """Handle mouse press for panning."""
-        if event.button() == Qt.RightButton:
+        """Handle mouse press for panning and window/level adjustment."""
+        if event.button() == Qt.LeftButton and (event.modifiers() & Qt.AltModifier):
+            # Window/Level adjustment with Alt+Left mouse
+            self._wl_dragging = True
+            self._wl_last_pos = event.position()
+            self.setCursor(Qt.SizeAllCursor)
+            event.accept()
+            return
+        elif event.button() == Qt.RightButton:
             self._panning = True
             self._pan_start = event.position()
             self.setCursor(Qt.ClosedHandCursor)
@@ -3491,12 +3645,51 @@ class SliceView(QGraphicsView):
         elif event.button() == Qt.LeftButton and self.measure_mode == "erase":
             # Delete measurement under cursor
             self._delete_measurement_under_cursor(event.position())
+        elif event.button() == Qt.LeftButton and self.measure_mode == "off":
+            # Crosshair navigation - update voxel position
+            img_pos = self.map_view_to_image_coords(event.position())
+            x, y = int(img_pos.x()), int(img_pos.y())
+            
+            # Convert 2D click to 3D voxel coordinates based on view orientation
+            if hasattr(self, "controller") and self.controller:
+                current_voxel = self.controller.voxel_idx.copy()
+                
+                if self.view_name == "axial":
+                    # Axial view: x,y click maps to voxel x,y; z stays current
+                    self.controller.set_voxel(x, y, current_voxel[2])
+                elif self.view_name == "sagittal":
+                    # Sagittal view: x,y click maps to voxel z,y; x stays current  
+                    self.controller.set_voxel(current_voxel[0], y, x)
+                elif self.view_name == "coronal":
+                    # Coronal view: x,y click maps to voxel x,z; y stays current
+                    self.controller.set_voxel(x, current_voxel[1], y)
+            
+            event.accept()
+            return
         else:
             super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent):
         """Handle mouse movement for panning, tooltips, and eraser highlighting."""
-        if self._panning:
+        if self._wl_dragging:
+            # Window/Level adjustment
+            delta = event.position() - self._wl_last_pos
+            self._wl_last_pos = event.position()
+            
+            # Horizontal movement adjusts window, vertical adjusts level
+            self._window = max(1.0, self._window + delta.x() * 2.0)
+            self._level = self._level + delta.y() * 2.0
+            
+            # Trigger re-rendering with new W/L values
+            if self.model:
+                self.model._render_slice_cached.cache_clear()
+                QPixmapCache.clear()
+                # Force update the current slice
+                self._update_current_slice_with_wl()
+            
+            event.accept()
+            return
+        elif self._panning:
             # Pan the view
             delta = event.position() - self._pan_start
             self.horizontalScrollBar().setValue(
@@ -3550,7 +3743,12 @@ class SliceView(QGraphicsView):
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         """Handle mouse release."""
-        if event.button() == Qt.RightButton and self._panning:
+        if self._wl_dragging and event.button() == Qt.LeftButton:
+            self._wl_dragging = False
+            self.setCursor(Qt.ArrowCursor)
+            event.accept()
+            return
+        elif event.button() == Qt.RightButton and self._panning:
             self._panning = False
             self.setCursor(Qt.ArrowCursor)
         elif (
@@ -3876,6 +4074,130 @@ class SliceView(QGraphicsView):
         self.resetTransform()
         if not self.pixmap_item.pixmap().isNull():
             self.fitInView(self.pixmap_item, Qt.KeepAspectRatio)
+    
+    def _update_current_slice_with_wl(self) -> None:
+        """Update current slice display with new window/level values."""
+        if not self.model:
+            return
+        
+        # Get current slice index
+        config = self.model.view_configs.get(self.view_name)
+        if not config:
+            return
+            
+        slice_idx = config["slice"]
+        
+        # Get slice data with window/level applied
+        qimage = self.model.render_slice_with_wl(
+            self.view_name, slice_idx, self._window, self._level,
+            show_overlay=self.model.global_overlay,
+            alpha=getattr(self.model, 'overlay_alpha', 0.5)
+        )
+        
+        # Update the display
+        if not qimage.isNull():
+            self.set_image(qimage, config.get("rotation", 0))
+
+    def set_window_level(self, window: float, level: float) -> None:
+        """Set window/level values and update display."""
+        self._window = max(1.0, window)
+        self._level = level
+        self._wl_active = True  # Enable W/L rendering
+        self._update_current_slice_with_wl()
+
+    def _update_crosshair(self, voxel_idx: list) -> None:
+        """Update crosshair position based on voxel coordinates."""
+        if not self.pixmap_item.pixmap() or self.pixmap_item.pixmap().isNull():
+            self.cross_h.setVisible(False)
+            self.cross_v.setVisible(False)
+            return
+        
+        # Get image dimensions
+        width = self.pixmap_item.pixmap().width()
+        height = self.pixmap_item.pixmap().height()
+        
+        # Calculate crosshair position based on view orientation
+        if self.view_name == "axial":
+            # Axial view: crosshair at (voxel_x, voxel_y)
+            x, y = voxel_idx[0], voxel_idx[1]
+        elif self.view_name == "sagittal":
+            # Sagittal view: crosshair at (voxel_z, voxel_y)
+            x, y = voxel_idx[2], voxel_idx[1]
+        elif self.view_name == "coronal":
+            # Coronal view: crosshair at (voxel_x, voxel_z)
+            x, y = voxel_idx[0], voxel_idx[2]
+        else:
+            return
+        
+        # Clamp to image bounds
+        x = max(0, min(x, width - 1))
+        y = max(0, min(y, height - 1))
+        
+        # Position crosshair lines (accounting for Y-flip in display)
+        display_y = height - 1 - y
+        
+        # Horizontal line (spans full width)
+        self.cross_h.setLine(0, display_y, width, display_y)
+        # Vertical line (spans full height)
+        self.cross_v.setLine(x, 0, x, height)
+        
+        # Make crosshairs visible only if crosshair visibility is enabled
+        self.cross_h.setVisible(self.crosshair_visible)
+        self.cross_v.setVisible(self.crosshair_visible)
+
+    def set_crosshair_visible(self, visible: bool) -> None:
+        """Set crosshair visibility state and update display."""
+        self.crosshair_visible = visible
+        self.cross_h.setVisible(visible)
+        self.cross_v.setVisible(visible)
+
+    def eventFilter(self, obj, event):
+        """Forward viewport drag/drop events to this SliceView."""
+        from PySide6.QtCore import QEvent
+        if obj is self.viewport():
+            if event.type() == QEvent.DragEnter:
+                self.dragEnterEvent(event)
+                return True
+            elif event.type() == QEvent.Drop:
+                self.dropEvent(event)
+                return True
+        return super().eventFilter(obj, event)
+
+    def dragEnterEvent(self, event):
+        """Handle drag enter events for file dropping."""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls and urls[0].isLocalFile():
+                file_path = urls[0].toLocalFile().lower()
+                # Accept common medical image formats
+                if file_path.endswith(('.nii', '.nii.gz', '.mha', '.mhd')):
+                    event.acceptProposedAction()
+                    return
+        event.ignore()
+
+    def dropEvent(self, event):
+        """Handle drop events for file loading."""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls and urls[0].isLocalFile():
+                file_path = urls[0].toLocalFile()
+                # Determine if this is a label file based on filename patterns
+                file_lower = file_path.lower()
+                if any(keyword in file_lower for keyword in ['label', 'seg', 'mask']):
+                    # Load as label through main window
+                    if hasattr(self, 'window') and callable(self.window):
+                        main_window = self.window()
+                        if hasattr(main_window, '_load_labels_from_path'):
+                            main_window._load_labels_from_path(file_path)
+                else:
+                    # Load as image through main window
+                    if hasattr(self, 'window') and callable(self.window):
+                        main_window = self.window()
+                        if hasattr(main_window, '_load_image_from_path'):
+                            main_window._load_image_from_path(file_path)
+                event.acceptProposedAction()
+                return
+        event.ignore()
 
 
 class MainWindow(QMainWindow):
@@ -3892,11 +4214,20 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1200, 800)
         self.resize(1400, 900)  # Set a good default size
 
+        # Initialize settings
+        self._settings = QSettings("SC", "MedicalImageViewer")
+
         # Create components
         self.setup_ui()
         self.setup_toolbar()
         self.setup_menu()
         self.setup_statusbar()
+        
+        # Enable drag and drop
+        self.setAcceptDrops(True)
+        
+        # Restore settings after UI is set up
+        self._restore_settings()
     
     def update_ui_text(self):
         """Update all UI text with current language translations."""
@@ -3921,6 +4252,7 @@ class MainWindow(QMainWindow):
             self.actions["exit"].setText(tr("exit"))
             self.actions["fit_all"].setText(tr("fit_all_views"))
             self.actions["toggle_control_panel"].setText(tr("toggle_control_panel"))
+            self.actions["toggle_crosshair"].setText(tr("toggle_crosshair"))
             self.actions["about"].setText(tr("about"))
         
         # Update control dock
@@ -4176,6 +4508,14 @@ class MainWindow(QMainWindow):
             checkbox.setChecked(True)
             self.view_checkboxes[name] = checkbox
             view_layout.addWidget(checkbox, 0, i)
+        
+        # Window/Level preset dropdown
+        wl_label = QLabel("W/L Preset:")
+        view_layout.addWidget(wl_label, 1, 0)
+        self.wl_preset = QComboBox()
+        self.wl_preset.addItems(["Min-Max (per-slice)", "Default", "Brain", "Abdomen", "Bone", "Auto (p2-p98)"])
+        view_layout.addWidget(self.wl_preset, 1, 1, 1, 2)  # Span 2 columns
+        
         view_group = create_collapsible_group(tr("view_controls"), view_layout)
         self.view_group = view_group  # Store reference for language updates
         dock_layout.addWidget(view_group)
@@ -4262,6 +4602,16 @@ class MainWindow(QMainWindow):
         self.reset_colors_btn = QPushButton(tr("reset_to_defaults"))
         self.reset_colors_btn.setEnabled(False)
         self.label_colors_layout.addWidget(self.reset_colors_btn)
+        
+        # Label legend with visibility checkboxes
+        legend_label = QLabel("Label Visibility:")
+        legend_label.setStyleSheet("font-weight: bold; margin-top: 8px;")
+        self.label_colors_layout.addWidget(legend_label)
+        
+        self.label_legend_list = QListWidget()
+        self.label_legend_list.setMaximumHeight(120)
+        self.label_legend_list.setVisible(False)  # Initially hidden
+        self.label_colors_layout.addWidget(self.label_legend_list)
 
         self.label_colors_group = create_collapsible_group(
             tr("label_colors"), self.label_colors_layout
@@ -4483,6 +4833,10 @@ class MainWindow(QMainWindow):
         save_screenshot_action = QAction(tr("save_screenshot"), self)
         save_screenshot_action.setShortcut("Ctrl+S")
         file_menu.addAction(save_screenshot_action)
+        
+        copy_screenshot_action = QAction("Copy Screenshot", self)
+        copy_screenshot_action.setShortcut("Ctrl+Shift+C")
+        file_menu.addAction(copy_screenshot_action)
 
         file_menu.addSeparator()
 
@@ -4510,6 +4864,12 @@ class MainWindow(QMainWindow):
         toggle_control_panel_action.setCheckable(True)
         toggle_control_panel_action.setChecked(True)
         view_menu.addAction(toggle_control_panel_action)
+
+        toggle_crosshair_action = QAction(tr("toggle_crosshair"), self)
+        toggle_crosshair_action.setShortcut("Ctrl+H")
+        toggle_crosshair_action.setCheckable(True)
+        toggle_crosshair_action.setChecked(True)
+        view_menu.addAction(toggle_crosshair_action)
 
         # Language menu
         language_menu = menubar.addMenu(tr("language"))
@@ -4624,10 +4984,12 @@ class MainWindow(QMainWindow):
             "save_label": save_label_action,
             "save_overlay": save_overlay_action,
             "save_screenshot": save_screenshot_action,
+            "copy_screenshot": copy_screenshot_action,
             "reset": reset_action,
             "exit": exit_action,
             "fit_all": fit_all_action,
             "toggle_control_panel": toggle_control_panel_action,
+            "toggle_crosshair": toggle_crosshair_action,
             "about": about_action,
         }
         
@@ -4664,6 +5026,72 @@ class MainWindow(QMainWindow):
         if event.key() == Qt.Key_Delete:
             self.controller.delete_selected_measurement()
         super().keyPressEvent(event)
+    
+    def dragEnterEvent(self, event):
+        """Handle drag enter events for file dropping."""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls and urls[0].isLocalFile():
+                file_path = urls[0].toLocalFile().lower()
+                # Accept common medical image formats
+                if file_path.endswith(('.nii', '.nii.gz', '.mha', '.mhd')):
+                    event.acceptProposedAction()
+                    return
+        event.ignore()
+    
+    def dropEvent(self, event):
+        """Handle drop events for file loading."""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if urls and urls[0].isLocalFile():
+                file_path = urls[0].toLocalFile()
+                # Determine if this is a label file based on filename patterns
+                file_lower = file_path.lower()
+                if any(keyword in file_lower for keyword in ['label', 'seg', 'mask']):
+                    self._load_labels_from_path(file_path)
+                else:
+                    self._load_image_from_path(file_path)
+                event.acceptProposedAction()
+                return
+        event.ignore()
+    
+    def _load_image_from_path(self, path: str):
+        """Load image from file path via controller."""
+        self.controller.load_image_from_path(path)
+    
+    def _load_labels_from_path(self, path: str):
+        """Load labels from file path via controller."""
+        self.controller.load_labels_from_path(path)
+    
+    def _restore_settings(self):
+        """Restore settings from QSettings."""
+        # Restore last image path if it exists
+        last_image = self._settings.value("last_image_path", "", str)
+        if last_image and Path(last_image).exists():
+            # Load the image in the background after a short delay to allow UI to finish setup
+            QTimer.singleShot(100, lambda: self.controller.load_image_from_path(last_image))
+        
+        # Restore overlay alpha setting
+        if hasattr(self, 'alpha_slider'):
+            alpha_value = self._settings.value("overlay_alpha", 128, int)  # Default to 50% (128/255)
+            self.alpha_slider.setValue(alpha_value)
+    
+    def closeEvent(self, event):
+        """Save settings when closing the application."""
+        # Save overlay alpha setting
+        if hasattr(self, 'alpha_slider'):
+            self._settings.setValue("overlay_alpha", self.alpha_slider.value())
+        
+        # Save current image path if one is loaded
+        if (self.controller.model.image_data is not None and 
+            self.controller.model.image_path):
+            self._settings.setValue("last_image_path", self.controller.model.image_path)
+        
+        super().closeEvent(event)
+    
+    def _save_last_image_path(self, path: str):
+        """Save last loaded image path to settings."""
+        self._settings.setValue("last_image_path", path)
 
 
 # ============================================================================
@@ -4687,6 +5115,12 @@ class ViewerController(QObject):
         self.preload_thread_pool.setMaxThreadCount(2)  # Limit preload threads
         self.preload_count = preload_count
         self.default_output_path = None
+
+        # Crosshair position for synchronized navigation
+        self.voxel_idx = [0, 0, 0]  # Current voxel position [x, y, z]
+        
+        # Label visibility control
+        self.active_labels = set()  # Set of currently visible label values
 
         # Anti-bounce timer for smooth interactions
         self.update_timer = QTimer()
@@ -4730,8 +5164,13 @@ class ViewerController(QObject):
         self.view.actions["save_overlay"].triggered.connect(self._save_overlay)
         self.view.actions["save_screenshot"].triggered.connect(
             self.save_screenshot)
+        self.view.actions["copy_screenshot"].triggered.connect(
+            self.copy_screenshot_to_clipboard)
         self.view.actions["toggle_control_panel"].triggered.connect(
             self.toggle_control_panel
+        )
+        self.view.actions["toggle_crosshair"].triggered.connect(
+            self.toggle_crosshair
         )
         self.view.actions["about"].triggered.connect(self.show_about)
 
@@ -4770,6 +5209,14 @@ class ViewerController(QObject):
 
         # Control panel toggle button
         self.view.panel_toggle_btn.clicked.connect(self.toggle_control_panel)
+
+        # Window/Level preset
+        if hasattr(self.view, 'wl_preset'):
+            self.view.wl_preset.currentTextChanged.connect(self._apply_wl_preset)
+        
+        # Label legend visibility checkboxes
+        if hasattr(self.view, 'label_legend_list'):
+            self.view.label_legend_list.itemChanged.connect(self._on_label_visibility_changed)
 
     def setup_slice_view_connections(self) -> None:
         """Connect slice view signals."""
@@ -6548,6 +6995,60 @@ class ViewerController(QObject):
         worker = LoadWorker(self.model, filepath, True)
         self.thread_pool.start(worker)
 
+    def load_image_from_path(self, filepath: str) -> None:
+        """Load image directly from file path (for drag & drop)."""
+        if not Path(filepath).exists():
+            QMessageBox.warning(self.view, "Warning", f"File not found: {filepath}")
+            return
+        
+        # Check for SimpleITK availability for MHA files
+        if filepath.lower().endswith(('.mha', '.mhd')) and not SITK_AVAILABLE:
+            QMessageBox.warning(
+                self.view, 
+                "SimpleITK Not Available", 
+                "SimpleITK is required for MHA/MHD files but is not installed. "
+                "Please use NIfTI format (.nii/.nii.gz) or install SimpleITK."
+            )
+            return
+
+        self.view.status_label.setText(tr("status_loading_image"))
+        
+        # Show progress bar if control panel exists
+        if hasattr(self.view, "control_dock") and self.view.control_dock is not None:
+            self.view.progress_bar.setValue(0)
+            self.view.progress_bar.setVisible(True)
+
+        # Load in background
+        worker = LoadWorker(self.model, filepath, False)
+        self.thread_pool.start(worker)
+
+    def load_labels_from_path(self, filepath: str) -> None:
+        """Load labels directly from file path (for drag & drop)."""
+        if not Path(filepath).exists():
+            QMessageBox.warning(self.view, "Warning", f"File not found: {filepath}")
+            return
+        
+        # Check for SimpleITK availability for MHA files
+        if filepath.lower().endswith(('.mha', '.mhd')) and not SITK_AVAILABLE:
+            QMessageBox.warning(
+                self.view, 
+                "SimpleITK Not Available", 
+                "SimpleITK is required for MHA/MHD files but is not installed. "
+                "Please use NIfTI format (.nii/.nii.gz) or install SimpleITK."
+            )
+            return
+
+        self.view.status_label.setText(tr("status_loading_labels"))
+        
+        # Show progress bar if control panel exists
+        if hasattr(self.view, "control_dock") and self.view.control_dock is not None:
+            self.view.progress_bar.setValue(0)
+            self.view.progress_bar.setVisible(True)
+
+        # Load in background
+        worker = LoadWorker(self.model, filepath, True)
+        self.thread_pool.start(worker)
+
     def reset_all(self) -> None:
         """Reset all views and data."""
         # Clear model
@@ -6571,9 +7072,28 @@ class ViewerController(QObject):
             self._clear_label_color_controls()
 
         for slice_view in self.view.slice_views.values():
+            # Store current crosshair visibility state
+            crosshair_visible = slice_view.crosshair_visible
+            
             slice_view.scene.clear()
             slice_view.pixmap_item = QGraphicsPixmapItem()
             slice_view.scene.addItem(slice_view.pixmap_item)
+            
+            # Recreate crosshair lines (scene.clear() deleted them)
+            slice_view.cross_h = QGraphicsLineItem()
+            slice_view.cross_v = QGraphicsLineItem()
+            crosshair_pen = QPen(QColor(255, 255, 0), 1)
+            crosshair_pen.setCosmetic(True)
+            slice_view.cross_h.setPen(crosshair_pen)
+            slice_view.cross_v.setPen(crosshair_pen)
+            slice_view.scene.addItem(slice_view.cross_h)
+            slice_view.scene.addItem(slice_view.cross_v)
+            # Initially hide crosshairs, visibility will be restored to previous state
+            slice_view.cross_h.setVisible(False)
+            slice_view.cross_v.setVisible(False)
+            
+            # Restore crosshair visibility state
+            slice_view.crosshair_visible = crosshair_visible
 
         self.view.status_label.setText(tr("status_ready"))
 
@@ -6674,6 +7194,18 @@ class ViewerController(QObject):
             self.view.status_label.setText(
                 f"Screenshot saved: {Path(filepath).name}")
 
+    def copy_screenshot_to_clipboard(self) -> None:
+        """Copy current view screenshot to clipboard."""
+        from PySide6.QtGui import QGuiApplication
+        
+        # Capture the central widget
+        pixmap = self.view.centralWidget().grab()
+        img = pixmap.toImage()
+        
+        # Copy to clipboard
+        QGuiApplication.clipboard().setImage(img)
+        self.view.status_label.setText("Screenshot copied to clipboard")
+
     def show_about(self) -> None:
         """Show About dialog."""
         about_dialog = AboutDialog(self.view)
@@ -6733,6 +7265,23 @@ class ViewerController(QObject):
                 tr("toggle_control_panel_tooltip"))
             self.view.actions["toggle_control_panel"].setChecked(True)
 
+    def toggle_crosshair(self) -> None:
+        """Toggle crosshair visibility in all slice views."""
+        if not hasattr(self.view, 'slice_views'):
+            return
+        
+        # Get current state from any slice view (they should all be in sync)
+        first_view = next(iter(self.view.slice_views.values()))
+        current_visible = first_view.crosshair_visible
+        new_visible = not current_visible
+        
+        # Update all slice views
+        for slice_view in self.view.slice_views.values():
+            slice_view.set_crosshair_visible(new_visible)
+        
+        # Update the menu action state
+        self.view.actions["toggle_crosshair"].setChecked(new_visible)
+
     def _reconnect_control_signals(self) -> None:
         """Reconnect control panel signals after recreating the dock."""
         # Control buttons
@@ -6773,6 +7322,9 @@ class ViewerController(QObject):
             f"Image loaded: {Path(filepath).name} - Shape: {shape}"
         )
 
+        # Save the loaded image path to settings
+        self.view._save_last_image_path(filepath)
+
         # Update control panel elements if they exist
         if hasattr(self.view, "control_dock") and self.view.control_dock is not None:
             self.view.progress_bar.setVisible(False)
@@ -6801,12 +7353,30 @@ class ViewerController(QObject):
                 self.model.set_slice(name, mid_slice)
 
         self._update_all_views()
+        
+        # Apply default Window/Level preset to all views
+        self._apply_wl_preset("Default")
+        
+        # Initialize crosshair position to center of volume
+        center_x, center_y, center_z = shape[0] // 2, shape[1] // 2, shape[2] // 2
+        self.voxel_idx = [center_x, center_y, center_z]
+        
+        # Update crosshairs in all views
+        for view_name, slice_view in self.view.slice_views.items():
+            if hasattr(slice_view, '_update_crosshair'):
+                slice_view._update_crosshair(self.voxel_idx)
 
     def _on_labels_loaded(self, filepath: str, unique_count: int) -> None:
         """Handle successful label loading."""
         self.view.status_label.setText(
             f"Labels loaded: {Path(filepath).name} - {unique_count} unique labels"
         )
+
+        # Auto-generate distinguishable colors for labels
+        self._generate_label_colormap()
+        
+        # Populate label legend with visibility controls
+        self._populate_label_legend()
 
         # Update control panel elements if they exist
         if hasattr(self.view, "control_dock") and self.view.control_dock is not None:
@@ -6817,6 +7387,38 @@ class ViewerController(QObject):
             self._populate_label_color_controls()
 
         self._update_all_views()
+
+    def _generate_label_colormap(self) -> None:
+        """Generate distinguishable colors for integer labels using HSV color space."""
+        if self.model.label_data is None:
+            return
+        
+        # Get unique label values (excluding 0/background)
+        unique_labels = np.unique(self.model.label_data)
+        label_values = [int(v) for v in unique_labels if v != 0]
+        
+        if not label_values:
+            return
+        
+        # Generate evenly distributed hues to avoid similar colors
+        n_labels = len(label_values)
+        for i, label_val in enumerate(label_values):
+            # Skip if user has already customized this color
+            if label_val in self.model._custom_label_colors:
+                continue
+                
+            # Generate evenly spaced hue (0-1 range)
+            hue = i / max(1, n_labels)
+            # Use high saturation and value for good visibility on medical images
+            saturation = 0.85
+            value = 1.0
+            
+            # Convert HSV to RGB
+            r, g, b = colorsys.hsv_to_rgb(hue, saturation, value)
+            rgb_color = (int(r * 255), int(g * 255), int(b * 255))
+            
+            # Set the generated color
+            self.model.set_label_color(label_val, rgb_color)
 
     def _on_load_error(self, error_msg: str) -> None:
         """Handle loading errors."""
@@ -6936,6 +7538,128 @@ class ViewerController(QObject):
 
         self._update_all_views()
 
+    def _apply_wl_preset(self, preset_name: str) -> None:
+        """Apply window/level preset to all views."""
+        if preset_name == "Min-Max (per-slice)":
+            # Disable W/L rendering and use original min-max normalization
+            for slice_view in self.view.slice_views.values():
+                slice_view._wl_active = False
+            self._update_all_views()
+            return
+            
+        presets = {
+            "Default": (400, 40),
+            "Brain": (80, 40),
+            "Abdomen": (350, 50),
+            "Bone": (2000, 500),
+            "Auto (p2-p98)": None,  # Special handling for auto calculation
+        }
+        
+        if preset_name == "Auto (p2-p98)":
+            # Calculate auto window/level based on current data percentiles
+            self._apply_auto_window_level()
+        elif preset_name in presets:
+            window, level = presets[preset_name]
+            # Apply to all slice views
+            for slice_view in self.view.slice_views.values():
+                slice_view.set_window_level(float(window), float(level))
+
+    def _apply_auto_window_level(self) -> None:
+        """Calculate and apply automatic window/level based on data percentiles."""
+        if self.model.image_data is None:
+            return
+            
+        # Get current slice data for all views to calculate percentiles
+        data_samples = []
+        for view_name in ['axial', 'sagittal', 'coronal']:
+            config = self.model.view_configs.get(view_name)
+            if config:
+                axis = config["axis"]  # Use axis (int) instead of view_name (str)
+                slice_idx = config["slice"]
+                slice_data = self.model.get_slice_data(axis, slice_idx, is_label=False)
+                if slice_data is not None and slice_data.size > 0:
+                    data_samples.append(slice_data.flatten())
+        
+        if data_samples:
+            # Combine all slice data
+            combined_data = np.concatenate(data_samples)
+            # Calculate percentiles (p2 and p98 to avoid extreme outliers)
+            p2, p98 = np.percentile(combined_data, [2, 98])
+            
+            # Calculate window and level
+            window = max(1.0, p98 - p2)  # Ensure minimum window of 1
+            level = (p98 + p2) / 2
+            
+            # Apply to all slice views
+            for slice_view in self.view.slice_views.values():
+                slice_view.set_window_level(float(window), float(level))
+
+    def _on_label_visibility_changed(self, item) -> None:
+        """Handle changes in label visibility checkboxes."""
+        label_value = item.data(Qt.UserRole)
+        if label_value is not None:
+            if item.checkState() == Qt.Checked:
+                self.active_labels.add(label_value)
+            else:
+                self.active_labels.discard(label_value)
+            
+            # Sync with model
+            self.model.active_labels = self.active_labels.copy()
+            
+            # Update overlay rendering
+            self._update_all_views()
+
+    def _populate_label_legend(self) -> None:
+        """Populate the label legend with visibility checkboxes."""
+        if not hasattr(self.view, 'label_legend_list'):
+            return
+        
+        # Clear existing items
+        self.view.label_legend_list.clear()
+        
+        # Get unique label values
+        if self.model.label_data is None:
+            self.view.label_legend_list.setVisible(False)
+            return
+        
+        unique_labels = np.unique(self.model.label_data)
+        label_values = [int(v) for v in unique_labels if v != 0]
+        
+        if not label_values:
+            self.view.label_legend_list.setVisible(False)
+            return
+        
+        # Initially, all labels are active
+        self.active_labels = set(label_values)
+        self.model.active_labels = self.active_labels.copy()
+        
+        # Create list items with checkboxes
+        for label_val in sorted(label_values):
+            # Get label color
+            color = self.model.get_label_color(label_val)
+            color_hex = f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}"
+            
+            # Create list item
+            item_text = f"Label {label_val}"
+            item = QListWidgetItem(item_text)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked)  # Initially all visible
+            item.setData(Qt.UserRole, label_val)
+            
+            # Set color indicator
+            item.setBackground(QColor(color[0], color[1], color[2], 100))  # Semi-transparent background
+            
+            self.view.label_legend_list.addItem(item)
+        
+        # Show the legend
+        self.view.label_legend_list.setVisible(True)
+
+    def set_active_labels(self, active_set: set) -> None:
+        """Set which labels should be visible in overlays."""
+        self.active_labels = active_set
+        self.model.active_labels = self.active_labels.copy()
+        self._update_all_views()
+
     def _populate_label_color_controls(self) -> None:
         """Populate the label color controls based on current label data."""
         # Update the model's current label values
@@ -7051,6 +7775,47 @@ class ViewerController(QObject):
         # Collapse the group
         self.view.label_colors_group.setChecked(False)
 
+    def set_voxel(self, x: int, y: int, z: int) -> None:
+        """Set crosshair voxel position and update all views."""
+        if self.model.image_data is None:
+            return
+        
+        # Clamp coordinates to image bounds
+        shape = self.model.image_data.shape[:3]
+        self.voxel_idx = [
+            int(np.clip(x, 0, shape[0] - 1)),
+            int(np.clip(y, 0, shape[1] - 1)), 
+            int(np.clip(z, 0, shape[2] - 1))
+        ]
+        
+        # Update slice positions based on voxel coordinates
+        # Axial view shows slice at z coordinate
+        self.model.set_slice("axial", self.voxel_idx[2])
+        # Sagittal view shows slice at x coordinate  
+        self.model.set_slice("sagittal", self.voxel_idx[0])
+        # Coronal view shows slice at y coordinate
+        self.model.set_slice("coronal", self.voxel_idx[1])
+        
+        # Update UI controls if they exist
+        if hasattr(self.view, "slice_controls"):
+            for view_name, axis_idx in [("axial", 2), ("sagittal", 0), ("coronal", 1)]:
+                if view_name in self.view.slice_controls:
+                    controls = self.view.slice_controls[view_name]
+                    slice_idx = self.voxel_idx[axis_idx]
+                    controls["slider"].setValue(slice_idx)
+                    controls["spinbox"].setValue(slice_idx)
+        
+        # Update all views with crosshairs
+        self._update_all_views_with_crosshairs()
+
+    def _update_all_views_with_crosshairs(self) -> None:
+        """Update all views and their crosshairs."""
+        self._update_all_views()
+        # Update crosshairs in each view
+        for view_name, slice_view in self.view.slice_views.items():
+            if hasattr(slice_view, '_update_crosshair'):
+                slice_view._update_crosshair(self.voxel_idx)
+
     def _update_all_views(self) -> None:
         """Update all visible slice views."""
         for name, config in self.model.view_configs.items():
@@ -7067,12 +7832,19 @@ class ViewerController(QObject):
         show_overlay = config["overlay"] and self.model.global_overlay
         alpha = config["alpha"]
 
-        # Render slice
-        qimage = self.model.render_slice(
-            view_name, slice_idx, show_overlay, alpha)
+        # Check if this view has W/L active and render accordingly
+        slice_view = self.view.slice_views[view_name]
+        if getattr(slice_view, "_wl_active", False):
+            qimage = self.model.render_slice_with_wl(
+                view_name, slice_idx, slice_view._window, slice_view._level,
+                show_overlay=show_overlay, alpha=alpha
+            )
+        else:
+            # Render slice normally
+            qimage = self.model.render_slice(
+                view_name, slice_idx, show_overlay, alpha)
 
         # Update view with rotation
-        slice_view = self.view.slice_views[view_name]
         rotation = config["rotation"]
         slice_view.set_image(qimage, rotation)
 

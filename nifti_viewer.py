@@ -7,7 +7,7 @@ A medical image viewer for NIfTI and MHA format files.
 import time
 import dataclasses
 import csv
-__version__ = "0.16.0"
+__version__ = "0.1.6"
 __author__ = "Steven Chen"
 __license__ = "MIT"
 __copyright__ = "Copyright 2025, Steven Chen"
